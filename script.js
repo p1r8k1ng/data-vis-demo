@@ -10,60 +10,55 @@ fetch('data.json')
             .attr("width", width)
             .attr("height", height);
 
-        // Force simulation for the graph layout
+        // Create a tooltip element
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+        // Create a simulation
         const simulation = d3.forceSimulation(data.artefacts)
             .force("link", d3.forceLink(data.relationships).id(d => d.id))
-            .force("charge", d3.forceManyBody().strength(-100))
+            .force("charge", d3.forceManyBody().strength(-200))
             .force("center", d3.forceCenter(width / 2, height / 2));
 
-        // Add links (edges)
+        // Draw links
         const link = svg.append("g")
             .selectAll("line")
             .data(data.relationships)
             .join("line")
             .attr("stroke", "#999")
+            .attr("stroke-opacity", 0.6)
             .attr("stroke-width", 2);
 
-        // Add nodes
+        // Draw nodes
         const node = svg.append("g")
             .selectAll("circle")
             .data(data.artefacts)
             .join("circle")
             .attr("r", 10)
             .attr("fill", "steelblue")
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 2)
             .call(d3.drag()
                 .on("start", dragStarted)
                 .on("drag", dragged)
                 .on("end", dragEnded));
 
-        // Add dynamic tooltips
+        // Add hover events to display tooltips
         node.on("mouseover", (event, d) => {
-            showTooltip(event, `${d.title} (${d.type})`);
-        }).on("mouseout", hideTooltip);
-
-        // Tooltip container
-        const tooltip = d3.select("body").append("div")
-            .attr("class", "tooltip")
-            .style("position", "absolute")
-            .style("background", "#fff")
-            .style("padding", "5px")
-            .style("border", "1px solid #ccc")
-            .style("border-radius", "5px")
-            .style("pointer-events", "none")
-            .style("opacity", 0);
-
-        function showTooltip(event, text) {
-            tooltip.transition().duration(200).style("opacity", 1);
-            tooltip.html(text)
+            tooltip.transition()
+                .duration(200)
+                .style("opacity", 1);
+            tooltip.html(`<strong>${d.title}</strong><br>Type: ${d.type}`)
                 .style("left", (event.pageX + 10) + "px")
                 .style("top", (event.pageY + 10) + "px");
-        }
+        }).on("mouseout", () => {
+            tooltip.transition()
+                .duration(200)
+                .style("opacity", 0);
+        });
 
-        function hideTooltip() {
-            tooltip.transition().duration(200).style("opacity", 0);
-        }
-
-        // Simulation updates
+        // Simulation tick updates
         simulation.on("tick", () => {
             link
                 .attr("x1", d => d.source.x)
