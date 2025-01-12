@@ -1,0 +1,11 @@
+{
+    "artefacts": [
+      { "id": 1, "title": "Artefact A", "type": "Painting" },
+      { "id": 2, "title": "Artefact B", "type": "Sculpture" },
+      { "id": 3, "title": "Artefact C", "type": "Manuscript" }
+    ],
+    "relationships": [
+      { "source": 1, "target": 2, "type": "Inspired By" },
+      { "source": 2, "target": 3, "type": "Created After" }
+    ]
+  }

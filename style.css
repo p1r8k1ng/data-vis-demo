@@ -1,0 +1,10 @@
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+
+#graph {
+    width: 100%;
+    height: 600px;
+    margin: 0 auto;
+}
