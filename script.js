@@ -50,7 +50,7 @@ fetch('data.json')
             .attr("fill", "steelblue")
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
-            .call(d3.drag()
+            .call(d3.drag() 
                 .on("start", dragStarted)
                 .on("drag", dragged)
                 .on("end", dragEnded));
