@@ -1,4 +1,3 @@
-// Load the data
 fetch('data.json')
     .then(response => response.json())
     .then(data => {
@@ -10,18 +9,31 @@ fetch('data.json')
             .attr("width", width)
             .attr("height", height);
 
-        // Create a tooltip element
         const tooltip = d3.select("body").append("div")
             .attr("class", "tooltip")
             .style("opacity", 0);
 
-        // Create a simulation
+        // Calculate node degree
+        const degrees = {};
+        data.artefacts.forEach(node => {
+            degrees[node.id] = 0;
+        });
+
+        data.relationships.forEach(link => {
+            degrees[link.source] = (degrees[link.source] || 0) + 1;
+            degrees[link.target] = (degrees[link.target] || 0) + 1;
+        });
+
+        // Attach degree to nodes
+        data.artefacts.forEach(node => {
+            node.degree = degrees[node.id] || 0;
+        });
+
         const simulation = d3.forceSimulation(data.artefacts)
             .force("link", d3.forceLink(data.relationships).id(d => d.id))
-            .force("charge", d3.forceManyBody().strength(-200))
+            .force("charge", d3.forceManyBody().strength(-300))
             .force("center", d3.forceCenter(width / 2, height / 2));
 
-        // Draw links
         const link = svg.append("g")
             .selectAll("line")
             .data(data.relationships)
@@ -30,12 +42,11 @@ fetch('data.json')
             .attr("stroke-opacity", 0.6)
             .attr("stroke-width", 2);
 
-        // Draw nodes
         const node = svg.append("g")
             .selectAll("circle")
             .data(data.artefacts)
             .join("circle")
-            .attr("r", 10)
+            .attr("r", d => 5 + d.degree * 2) // Node size based on degree
             .attr("fill", "steelblue")
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
@@ -44,12 +55,11 @@ fetch('data.json')
                 .on("drag", dragged)
                 .on("end", dragEnded));
 
-        // Add hover events to display tooltips
         node.on("mouseover", (event, d) => {
             tooltip.transition()
                 .duration(200)
                 .style("opacity", 1);
-            tooltip.html(`<strong>${d.title}</strong><br>Type: ${d.type}`)
+            tooltip.html(`<strong>${d.title}</strong><br>Type: ${d.type}<br>Connections: ${d.degree}`)
                 .style("left", (event.pageX + 10) + "px")
                 .style("top", (event.pageY + 10) + "px");
         }).on("mouseout", () => {
@@ -58,7 +68,6 @@ fetch('data.json')
                 .style("opacity", 0);
         });
 
-        // Simulation tick updates
         simulation.on("tick", () => {
             link
                 .attr("x1", d => d.source.x)
@@ -71,7 +80,6 @@ fetch('data.json')
                 .attr("cy", d => d.y);
         });
 
-        // Drag functions
         function dragStarted(event, d) {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;
