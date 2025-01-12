@@ -31,7 +31,7 @@ fetch('data.json')
 
         const simulation = d3.forceSimulation(data.artefacts)
             .force("link", d3.forceLink(data.relationships).id(d => d.id))
-            .force("charge", d3.forceManyBody().strength(-300))
+            .force("charge", d3.forceManyBody().strength(-400))
             .force("center", d3.forceCenter(width / 2, height / 2));
 
         const link = svg.append("g")
@@ -46,7 +46,7 @@ fetch('data.json')
             .selectAll("circle")
             .data(data.artefacts)
             .join("circle")
-            .attr("r", d => 5 + d.degree * 2) // Node size based on degree
+            .attr("r", d => 5 + d.degree * 5) // Node size based on degree
             .attr("fill", "steelblue")
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)

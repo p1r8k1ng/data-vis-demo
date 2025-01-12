@@ -1,18 +1,25 @@
 {
-    "artefacts": [
-      { "id": 1, "title": "Artefact A", "type": "Painting" },
-      { "id": 2, "title": "Artefact B", "type": "Sculpture" },
-      { "id": 3, "title": "Artefact C", "type": "Manuscript" },
-      { "id": 4, "title": "Artefact D", "type": "Drawing" },
-      { "id": 5, "title": "Artefact E", "type": "Photograph" }
-    ],
-    "relationships": [
-      { "source": 1, "target": 2, "type": "Inspired By" },
-      { "source": 1, "target": 3, "type": "Related To" },
-      { "source": 2, "target": 3, "type": "Created After" },
-      { "source": 3, "target": 4, "type": "Similar To" },
-      { "source": 4, "target": 5, "type": "Referenced By" },
-      { "source": 1, "target": 5, "type": "Mentions" }
-    ]
-  }
-  
+  "artefacts": [
+    { "id": 1, "title": "Artefact A", "type": "Painting" },
+    { "id": 2, "title": "Artefact B", "type": "Sculpture" },
+    { "id": 3, "title": "Artefact C", "type": "Manuscript" },
+    { "id": 4, "title": "Artefact D", "type": "Drawing" },
+    { "id": 5, "title": "Artefact E", "type": "Photograph" },
+    { "id": 6, "title": "Artefact F", "type": "Installation" },
+    { "id": 7, "title": "Artefact G", "type": "Relic" },
+    { "id": 8, "title": "Artefact H", "type": "Architecture" },
+    { "id": 9, "title": "Artefact I", "type": "Digital Art" },
+    { "id": 10, "title": "Artefact J", "type": "Ceramic" }
+  ],
+  "relationships": [
+    { "source": 1, "target": 2, "type": "Inspired By" },
+    { "source": 1, "target": 3, "type": "Related To" },
+    { "source": 1, "target": 4, "type": "Influenced By" },
+    { "source": 2, "target": 5, "type": "Referenced By" },
+    { "source": 3, "target": 6, "type": "Similar To" },
+    { "source": 4, "target": 7, "type": "Derived From" },
+    { "source": 1, "target": 8, "type": "Mentions" },
+    { "source": 5, "target": 9, "type": "Inspired By" },
+    { "source": 6, "target": 10, "type": "Similar To" }
+  ]
+}
