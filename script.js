@@ -36,9 +36,32 @@ fetch('data.json')
                 .on("drag", dragged)
                 .on("end", dragEnded));
 
-        // Add tooltips
-        node.append("title")
-            .text(d => `${d.title} (${d.type})`);
+        // Add dynamic tooltips
+        node.on("mouseover", (event, d) => {
+            showTooltip(event, `${d.title} (${d.type})`);
+        }).on("mouseout", hideTooltip);
+
+        // Tooltip container
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "tooltip")
+            .style("position", "absolute")
+            .style("background", "#fff")
+            .style("padding", "5px")
+            .style("border", "1px solid #ccc")
+            .style("border-radius", "5px")
+            .style("pointer-events", "none")
+            .style("opacity", 0);
+
+        function showTooltip(event, text) {
+            tooltip.transition().duration(200).style("opacity", 1);
+            tooltip.html(text)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY + 10) + "px");
+        }
+
+        function hideTooltip() {
+            tooltip.transition().duration(200).style("opacity", 0);
+        }
 
         // Simulation updates
         simulation.on("tick", () => {
