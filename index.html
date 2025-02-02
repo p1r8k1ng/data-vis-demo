@@ -8,7 +8,28 @@
 </head>
 <body>
     <h1>Artefact Network Visualisation</h1>
-    <div id="graph"></div>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>Filter Options</h2>
+            <div>
+                <label for="type">Filter by Type:</label>
+                <select id="type">
+                    <option value="all">All</option>
+                    <option value="Painting">Painting</option>
+                    <option value="Sculpture">Sculpture</option>
+                    <option value="Manuscript">Manuscript</option>
+                    <option value="Drawing">Drawing</option>
+                    <option value="Photograph">Photograph</option>
+                    <option value="Installation">Installation</option>
+                    <option value="Relic">Relic</option>
+                    <option value="Architecture">Architecture</option>
+                    <option value="Digital Art">Digital Art</option>
+                    <option value="Ceramic">Ceramic</option>
+                </select>
+            </div>
+        </aside>
+        <div id="graph"></div>
+    </div>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="script.js"></script>
 </body>
