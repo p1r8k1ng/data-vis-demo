@@ -1,25 +1,123 @@
 {
+  "@context": "https://linked.art/ns/v1/linked-art.json",
+  "type": "LinkedArtData",
   "artefacts": [
-    { "id": 1, "title": "Artefact A", "type": "Painting" },
-    { "id": 2, "title": "Artefact B", "type": "Sculpture" },
-    { "id": 3, "title": "Artefact C", "type": "Manuscript" },
-    { "id": 4, "title": "Artefact D", "type": "Drawing" },
-    { "id": 5, "title": "Artefact E", "type": "Photograph" },
-    { "id": 6, "title": "Artefact F", "type": "Installation" },
-    { "id": 7, "title": "Artefact G", "type": "Relic" },
-    { "id": 8, "title": "Artefact H", "type": "Architecture" },
-    { "id": 9, "title": "Artefact I", "type": "Digital Art" },
-    { "id": 10, "title": "Artefact J", "type": "Ceramic" }
+    {
+      "id": "https://example.org/artworks/1",
+      "type": "HumanMadeObject",
+      "label": "Water Lilies",
+      "classified_as": "Painting",
+      "produced_by": {
+        "id": "https://example.org/people/1",
+        "type": "Actor",
+        "label": "Claude Monet"
+      },
+      "current_location": {
+        "id": "https://example.org/institutions/1",
+        "type": "Group",
+        "label": "Musée de l'Orangerie"
+      }
+    },
+    {
+      "id": "https://example.org/artworks/2",
+      "type": "HumanMadeObject",
+      "label": "Starry Night",
+      "classified_as": "Painting",
+      "produced_by": {
+        "id": "https://example.org/people/2",
+        "type": "Actor",
+        "label": "Vincent van Gogh"
+      },
+      "current_location": {
+        "id": "https://example.org/institutions/2",
+        "type": "Group",
+        "label": "MoMA"
+      }
+    }
   ],
-  "relationships": [
-    { "source": 1, "target": 2, "type": "Inspired By" },
-    { "source": 1, "target": 3, "type": "Related To" },
-    { "source": 1, "target": 4, "type": "Influenced By" },
-    { "source": 2, "target": 5, "type": "Referenced By" },
-    { "source": 3, "target": 6, "type": "Similar To" },
-    { "source": 4, "target": 7, "type": "Derived From" },
-    { "source": 1, "target": 8, "type": "Mentions" },
-    { "source": 5, "target": 9, "type": "Inspired By" },
-    { "source": 6, "target": 10, "type": "Similar To" }
+  "creators": [
+    {
+      "id": "https://example.org/people/1",
+      "type": "Actor",
+      "label": "Claude Monet"
+    },
+    {
+      "id": "https://example.org/people/2",
+      "type": "Actor",
+      "label": "Vincent van Gogh",
+      "participated_in": [
+        {
+          "id": "https://example.org/event/1",
+          "type": "Activity",
+          "label": "Impressionist Influence on Van Gogh",
+          "carried_out_by": {
+            "id": "https://example.org/people/1",
+            "type": "Actor",
+            "label": "Claude Monet"
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://example.org/people/3",
+      "type": "Actor",
+      "label": "J.M.W. Turner",
+      "participated_in": [
+        {
+          "id": "https://example.org/event/2",
+          "type": "Activity",
+          "label": "Turner’s Influence on Monet",
+          "carried_out_by": {
+            "id": "https://example.org/people/3",
+            "type": "Actor",
+            "label": "J.M.W. Turner"
+          }
+        }
+      ]
+    }
+  ],
+  "institutions": [
+    {
+      "id": "https://example.org/institutions/1",
+      "type": "Group",
+      "label": "Musée de l'Orangerie"
+    },
+    {
+      "id": "https://example.org/institutions/2",
+      "type": "Group",
+      "label": "MoMA"
+    }
+  ],
+  "events": [
+    {
+      "id": "https://example.org/event/1",
+      "type": "Activity",
+      "label": "Impressionist Influence on Van Gogh",
+      "carried_out_by": {
+        "id": "https://example.org/people/1",
+        "type": "Actor",
+        "label": "Claude Monet"
+      },
+      "participated_by": {
+        "id": "https://example.org/people/2",
+        "type": "Actor",
+        "label": "Vincent van Gogh"
+      }
+    },
+    {
+      "id": "https://example.org/event/2",
+      "type": "Activity",
+      "label": "Turner’s Influence on Monet",
+      "carried_out_by": {
+        "id": "https://example.org/people/3",
+        "type": "Actor",
+        "label": "J.M.W. Turner"
+      },
+      "participated_by": {
+        "id": "https://example.org/people/1",
+        "type": "Actor",
+        "label": "Claude Monet"
+      }
+    }
   ]
 }
