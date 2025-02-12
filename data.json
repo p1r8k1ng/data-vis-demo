@@ -2,7 +2,7 @@
   "@context": "https://linked.art/ns/v1/linked-art.json",
   "type": "LinkedArtData",
   "artefacts": [
-    {
+    
       "id": "https://example.org/artworks/1",
       "type": "HumanMadeObject",
       "label": "Water Lilies",
