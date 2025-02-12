@@ -13,17 +13,14 @@ fetch('data.json')
             .attr("class", "tooltip")
             .style("opacity", 0);
 
-        // Extract all nodes
-        const nodes = [
+        let nodes = [
             ...data.artefacts.map(a => ({ ...a, type: "Artefact" })),
             ...data.creators.map(c => ({ ...c, type: "Creator" })),
             ...data.events.map(e => ({ ...e, type: "Event" }))
         ];
 
-        // Extract relationships (links)
-        const links = [];
+        let links = [];
 
-        // Artefact -> Creator relationships
         data.artefacts.forEach(a => {
             if (a.produced_by) {
                 links.push({
@@ -34,7 +31,6 @@ fetch('data.json')
             }
         });
 
-        // Event-based influence relationships
         data.events.forEach(event => {
             if (event.carried_out_by && event.participated_by) {
                 links.push({
@@ -50,29 +46,20 @@ fetch('data.json')
             }
         });
 
-        // Calculate node degree
         const degrees = {};
-        nodes.forEach(node => {
-            degrees[node.id] = 0;
-        });
-
+        nodes.forEach(node => { degrees[node.id] = 0; });
         links.forEach(link => {
             degrees[link.source] = (degrees[link.source] || 0) + 1;
             degrees[link.target] = (degrees[link.target] || 0) + 1;
         });
 
-        // Attach degree to nodes
-        nodes.forEach(node => {
-            node.degree = degrees[node.id] || 0;
-        });
+        nodes.forEach(node => { node.degree = degrees[node.id] || 0; });
 
-        // Set up force simulation
         const simulation = d3.forceSimulation(nodes)
             .force("link", d3.forceLink(links).id(d => d.id).distance(150))
             .force("charge", d3.forceManyBody().strength(-300))
             .force("center", d3.forceCenter(width / 2, height / 2));
 
-        // Draw links
         const link = svg.append("g")
             .selectAll("line")
             .data(links)
@@ -81,12 +68,11 @@ fetch('data.json')
             .attr("stroke-opacity", 0.8)
             .attr("stroke-width", 2);
 
-        // Draw nodes
         const node = svg.append("g")
             .selectAll("circle")
             .data(nodes)
             .join("circle")
-            .attr("r", d => 6 + d.degree * 4) // Node size based on connections
+            .attr("r", d => 6 + d.degree * 4)
             .attr("fill", d => {
                 if (d.type === "Artefact") return "steelblue";
                 if (d.type === "Creator") return "darkgreen";
@@ -100,7 +86,6 @@ fetch('data.json')
                 .on("drag", dragged)
                 .on("end", dragEnded));
 
-        // Hover tooltips
         node.on("mouseover", (event, d) => {
             tooltip.transition()
                 .duration(200)
@@ -114,7 +99,6 @@ fetch('data.json')
                 .style("opacity", 0);
         });
 
-        // Update simulation
         simulation.on("tick", () => {
             link
                 .attr("x1", d => d.source.x)
@@ -127,7 +111,6 @@ fetch('data.json')
                 .attr("cy", d => d.y);
         });
 
-        // Drag functions
         function dragStarted(event, d) {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;
@@ -144,4 +127,48 @@ fetch('data.json')
             d.fx = null;
             d.fy = null;
         }
+
+        // Populate filter dropdowns
+        function populateFilters() {
+            const artistSelect = document.getElementById("artist");
+            const institutionSelect = document.getElementById("institution");
+
+            const uniqueArtists = [...new Set(data.creators.map(c => c.label))];
+            uniqueArtists.forEach(artist => {
+                const option = document.createElement("option");
+                option.value = artist;
+                option.textContent = artist;
+                artistSelect.appendChild(option);
+            });
+
+            const uniqueInstitutions = [...new Set(data.institutions.map(i => i.label))];
+            uniqueInstitutions.forEach(inst => {
+                const option = document.createElement("option");
+                option.value = inst;
+                option.textContent = inst;
+                institutionSelect.appendChild(option);
+            });
+        }
+        populateFilters();
+
+        // Apply filtering
+        document.getElementById("applyFilters").addEventListener("click", () => {
+            const selectedType = document.getElementById("type").value;
+            const selectedArtist = document.getElementById("artist").value;
+            const selectedInstitution = document.getElementById("institution").value;
+            const showInfluence = document.getElementById("influence").checked;
+
+            const filteredNodes = nodes.filter(n => {
+                if (selectedType !== "all" && n.classified_as !== selectedType) return false;
+                if (selectedArtist !== "all" && n.produced_by && n.produced_by.label !== selectedArtist) return false;
+                if (selectedInstitution !== "all" && n.current_location && n.current_location.label !== selectedInstitution) return false;
+                return true;
+            });
+
+            const filteredLinks = links.filter(l => showInfluence || l.label !== "influenced");
+
+            simulation.nodes(filteredNodes);
+            simulation.force("link").links(filteredLinks);
+            simulation.alpha(1).restart();
+        });
     });

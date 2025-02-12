@@ -11,6 +11,7 @@
     <div class="container">
         <aside class="sidebar">
             <h2>Filter Options</h2>
+        
             <div>
                 <label for="type">Filter by Type:</label>
                 <select id="type">
@@ -26,6 +27,29 @@
                     <option value="Digital Art">Digital Art</option>
                     <option value="Ceramic">Ceramic</option>
                 </select>
+            </div>
+        
+            <div>
+                <label for="artist">Filter by Artist:</label>
+                <select id="artist">
+                    <option value="all">All</option>
+                </select>
+            </div>
+        
+            <div>
+                <label for="institution">Filter by Institution:</label>
+                <select id="institution">
+                    <option value="all">All</option>
+                </select>
+            </div>
+        
+            <div>
+                <label for="influence">Show Influence Connections:</label>
+                <input type="checkbox" id="influence" checked>
+            </div>
+        
+            <div>
+                <button id="applyFilters">Apply Filters</button>
             </div>
         </aside>
         <div id="graph"></div>
