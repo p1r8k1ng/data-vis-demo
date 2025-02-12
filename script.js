@@ -1,6 +1,8 @@
-fetch('data.json')
+fetch('https://linked.art/ns/v1/linked-art.json')
     .then(response => response.json())
     .then(data => {
+        console.log("Fetched Data:", data); // Debugging
+
         const width = 900;
         const height = 700;
 
@@ -13,39 +15,56 @@ fetch('data.json')
             .attr("class", "tooltip")
             .style("opacity", 0);
 
-        let nodes = [
-            ...data.artefacts.map(a => ({ ...a, type: "Artefact" })),
-            ...data.creators.map(c => ({ ...c, type: "Creator" })),
-            ...data.events.map(e => ({ ...e, type: "Event" }))
-        ];
-
+        let nodes = [];
         let links = [];
 
-        data.artefacts.forEach(a => {
-            if (a.produced_by) {
-                links.push({
-                    source: a.id,
-                    target: a.produced_by.id,
-                    label: "created by"
-                });
-            }
-        });
+        // Extract entities from API response
+        if (data["E22_Human-Made_Object"]) {
+            nodes.push(...data["E22_Human-Made_Object"].map(a => ({ ...a, type: "Artefact" })));
+        }
+        if (data["E39_Actor"]) {
+            nodes.push(...data["E39_Actor"].map(a => ({ ...a, type: "Actor" })));
+        }
+        if (data["E74_Group"]) {
+            nodes.push(...data["E74_Group"].map(a => ({ ...a, type: "Institution" })));
+        }
+        if (data["E5_Event"]) {
+            nodes.push(...data["E5_Event"].map(e => ({ ...e, type: "Event" })));
+        }
 
-        data.events.forEach(event => {
-            if (event.carried_out_by && event.participated_by) {
-                links.push({
-                    source: event.carried_out_by.id,
-                    target: event.id,
-                    label: "influenced"
-                });
-                links.push({
-                    source: event.id,
-                    target: event.participated_by.id,
-                    label: "was influenced by"
-                });
-            }
-        });
+        // Build relationships (links)
+        if (data["E22_Human-Made_Object"]) {
+            data["E22_Human-Made_Object"].forEach(artwork => {
+                if (artwork["P108i_was_produced_by"]) {
+                    links.push({
+                        source: artwork.id,
+                        target: artwork["P108i_was_produced_by"].id,
+                        label: "Created by"
+                    });
+                }
+                if (artwork["P55_has_current_location"]) {
+                    links.push({
+                        source: artwork.id,
+                        target: artwork["P55_has_current_location"].id,
+                        label: "Located at"
+                    });
+                }
+            });
+        }
 
+        if (data["E5_Event"]) {
+            data["E5_Event"].forEach(event => {
+                if (event["P14_carried_out_by"]) {
+                    links.push({
+                        source: event.id,
+                        target: event["P14_carried_out_by"].id,
+                        label: "Carried out by"
+                    });
+                }
+            });
+        }
+
+        // Calculate node degree
         const degrees = {};
         nodes.forEach(node => { degrees[node.id] = 0; });
         links.forEach(link => {
@@ -55,11 +74,13 @@ fetch('data.json')
 
         nodes.forEach(node => { node.degree = degrees[node.id] || 0; });
 
+        // Set up force simulation
         const simulation = d3.forceSimulation(nodes)
             .force("link", d3.forceLink(links).id(d => d.id).distance(150))
             .force("charge", d3.forceManyBody().strength(-300))
             .force("center", d3.forceCenter(width / 2, height / 2));
 
+        // Draw links
         const link = svg.append("g")
             .selectAll("line")
             .data(links)
@@ -68,14 +89,16 @@ fetch('data.json')
             .attr("stroke-opacity", 0.8)
             .attr("stroke-width", 2);
 
+        // Draw nodes
         const node = svg.append("g")
             .selectAll("circle")
             .data(nodes)
             .join("circle")
-            .attr("r", d => 6 + d.degree * 4)
+            .attr("r", d => 6 + d.degree * 4) // Node size based on connections
             .attr("fill", d => {
                 if (d.type === "Artefact") return "steelblue";
-                if (d.type === "Creator") return "darkgreen";
+                if (d.type === "Actor") return "darkgreen";
+                if (d.type === "Institution") return "purple";
                 if (d.type === "Event") return "crimson";
                 return "gray";
             })
@@ -86,11 +109,12 @@ fetch('data.json')
                 .on("drag", dragged)
                 .on("end", dragEnded));
 
+        // Hover tooltips
         node.on("mouseover", (event, d) => {
             tooltip.transition()
                 .duration(200)
                 .style("opacity", 1);
-            tooltip.html(`<strong>${d.label}</strong><br>Type: ${d.type}<br>Connections: ${d.degree}`)
+            tooltip.html(`<strong>${d.label || d.id}</strong><br>Type: ${d.type}<br>Connections: ${d.degree}`)
                 .style("left", (event.pageX + 10) + "px")
                 .style("top", (event.pageY + 10) + "px");
         }).on("mouseout", () => {
@@ -99,6 +123,7 @@ fetch('data.json')
                 .style("opacity", 0);
         });
 
+        // Update simulation
         simulation.on("tick", () => {
             link
                 .attr("x1", d => d.source.x)
@@ -111,6 +136,7 @@ fetch('data.json')
                 .attr("cy", d => d.y);
         });
 
+        // Drag functions
         function dragStarted(event, d) {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;
@@ -128,47 +154,31 @@ fetch('data.json')
             d.fy = null;
         }
 
-        // Populate filter dropdowns
+        // Populate filter dropdowns dynamically
         function populateFilters() {
             const artistSelect = document.getElementById("artist");
             const institutionSelect = document.getElementById("institution");
 
-            const uniqueArtists = [...new Set(data.creators.map(c => c.label))];
-            uniqueArtists.forEach(artist => {
-                const option = document.createElement("option");
-                option.value = artist;
-                option.textContent = artist;
-                artistSelect.appendChild(option);
-            });
+            if (data["E39_Actor"]) {
+                const uniqueArtists = [...new Set(data["E39_Actor"].map(a => a.label))];
+                uniqueArtists.forEach(artist => {
+                    const option = document.createElement("option");
+                    option.value = artist;
+                    option.textContent = artist;
+                    artistSelect.appendChild(option);
+                });
+            }
 
-            const uniqueInstitutions = [...new Set(data.institutions.map(i => i.label))];
-            uniqueInstitutions.forEach(inst => {
-                const option = document.createElement("option");
-                option.value = inst;
-                option.textContent = inst;
-                institutionSelect.appendChild(option);
-            });
+            if (data["E74_Group"]) {
+                const uniqueInstitutions = [...new Set(data["E74_Group"].map(i => i.label))];
+                uniqueInstitutions.forEach(inst => {
+                    const option = document.createElement("option");
+                    option.value = inst;
+                    option.textContent = inst;
+                    institutionSelect.appendChild(option);
+                });
+            }
         }
         populateFilters();
-
-        // Apply filtering
-        document.getElementById("applyFilters").addEventListener("click", () => {
-            const selectedType = document.getElementById("type").value;
-            const selectedArtist = document.getElementById("artist").value;
-            const selectedInstitution = document.getElementById("institution").value;
-            const showInfluence = document.getElementById("influence").checked;
-
-            const filteredNodes = nodes.filter(n => {
-                if (selectedType !== "all" && n.classified_as !== selectedType) return false;
-                if (selectedArtist !== "all" && n.produced_by && n.produced_by.label !== selectedArtist) return false;
-                if (selectedInstitution !== "all" && n.current_location && n.current_location.label !== selectedInstitution) return false;
-                return true;
-            });
-
-            const filteredLinks = links.filter(l => showInfluence || l.label !== "influenced");
-
-            simulation.nodes(filteredNodes);
-            simulation.force("link").links(filteredLinks);
-            simulation.alpha(1).restart();
-        });
-    });
+    })
+    .catch(error => console.error("Error fetching data:", error));
