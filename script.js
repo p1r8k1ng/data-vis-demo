@@ -1,7 +1,7 @@
 fetch('https://linked.art/ns/v1/linked-art.json')
     .then(response => response.json())
     .then(data => {
-        console.log("Fetched Data:", data); // Debugging
+        console.log("API Response:", data); // Debugging 
 
         const width = 900;
         const height = 700;
@@ -18,61 +18,47 @@ fetch('https://linked.art/ns/v1/linked-art.json')
         let nodes = [];
         let links = [];
 
-        // Extract entities from API response
-        if (data["E22_Human-Made_Object"]) {
-            nodes.push(...data["E22_Human-Made_Object"].map(a => ({ ...a, type: "Artefact" })));
-        }
-        if (data["E39_Actor"]) {
-            nodes.push(...data["E39_Actor"].map(a => ({ ...a, type: "Actor" })));
-        }
-        if (data["E74_Group"]) {
-            nodes.push(...data["E74_Group"].map(a => ({ ...a, type: "Institution" })));
-        }
-        if (data["E5_Event"]) {
-            nodes.push(...data["E5_Event"].map(e => ({ ...e, type: "Event" })));
-        }
-
-        // Build relationships (links)
-        if (data["E22_Human-Made_Object"]) {
-            data["E22_Human-Made_Object"].forEach(artwork => {
-                if (artwork["P108i_was_produced_by"]) {
-                    links.push({
-                        source: artwork.id,
-                        target: artwork["P108i_was_produced_by"].id,
-                        label: "Created by"
-                    });
-                }
-                if (artwork["P55_has_current_location"]) {
-                    links.push({
-                        source: artwork.id,
-                        target: artwork["P55_has_current_location"].id,
-                        label: "Located at"
-                    });
-                }
-            });
+        // Extract entities dynamically
+        for (const key in data) {
+            if (Array.isArray(data[key])) {
+                data[key].forEach(item => {
+                    if (item["@type"] === "HumanMadeObject") {
+                        nodes.push({ ...item, type: "Artefact" });
+                    } else if (item["@type"] === "Person" || item["@type"] === "Group") {
+                        nodes.push({ ...item, type: "Actor" });
+                    } else if (item["@type"] === "Activity") {
+                        nodes.push({ ...item, type: "Event" });
+                    }
+                });
+            }
         }
 
-        if (data["E5_Event"]) {
-            data["E5_Event"].forEach(event => {
-                if (event["P14_carried_out_by"]) {
-                    links.push({
-                        source: event.id,
-                        target: event["P14_carried_out_by"].id,
-                        label: "Carried out by"
-                    });
-                }
-            });
-        }
-
-        // Calculate node degree
-        const degrees = {};
-        nodes.forEach(node => { degrees[node.id] = 0; });
-        links.forEach(link => {
-            degrees[link.source] = (degrees[link.source] || 0) + 1;
-            degrees[link.target] = (degrees[link.target] || 0) + 1;
+        // Extract relationships dynamically
+        nodes.forEach(node => {
+            if (node["produced_by"]) {
+                links.push({
+                    source: node.id,
+                    target: node["produced_by"]["@id"],
+                    label: "Created by"
+                });
+            }
+            if (node["current_location"]) {
+                links.push({
+                    source: node.id,
+                    target: node["current_location"]["@id"],
+                    label: "Located at"
+                });
+            }
         });
 
-        nodes.forEach(node => { node.degree = degrees[node.id] || 0; });
+        // Check if nodes and links exist
+        if (nodes.length === 0) {
+            console.error("No nodes found. API might not contain the expected data.");
+            return;
+        }
+        if (links.length === 0) {
+            console.warn("No links found. Relationships might not be properly defined.");
+        }
 
         // Set up force simulation
         const simulation = d3.forceSimulation(nodes)
@@ -94,11 +80,10 @@ fetch('https://linked.art/ns/v1/linked-art.json')
             .selectAll("circle")
             .data(nodes)
             .join("circle")
-            .attr("r", d => 6 + d.degree * 4) // Node size based on connections
+            .attr("r", 8)
             .attr("fill", d => {
                 if (d.type === "Artefact") return "steelblue";
                 if (d.type === "Actor") return "darkgreen";
-                if (d.type === "Institution") return "purple";
                 if (d.type === "Event") return "crimson";
                 return "gray";
             })
@@ -114,7 +99,7 @@ fetch('https://linked.art/ns/v1/linked-art.json')
             tooltip.transition()
                 .duration(200)
                 .style("opacity", 1);
-            tooltip.html(`<strong>${d.label || d.id}</strong><br>Type: ${d.type}<br>Connections: ${d.degree}`)
+            tooltip.html(`<strong>${d.label || d.id}</strong><br>Type: ${d.type}`)
                 .style("left", (event.pageX + 10) + "px")
                 .style("top", (event.pageY + 10) + "px");
         }).on("mouseout", () => {
@@ -154,31 +139,5 @@ fetch('https://linked.art/ns/v1/linked-art.json')
             d.fy = null;
         }
 
-        // Populate filter dropdowns dynamically
-        function populateFilters() {
-            const artistSelect = document.getElementById("artist");
-            const institutionSelect = document.getElementById("institution");
-
-            if (data["E39_Actor"]) {
-                const uniqueArtists = [...new Set(data["E39_Actor"].map(a => a.label))];
-                uniqueArtists.forEach(artist => {
-                    const option = document.createElement("option");
-                    option.value = artist;
-                    option.textContent = artist;
-                    artistSelect.appendChild(option);
-                });
-            }
-
-            if (data["E74_Group"]) {
-                const uniqueInstitutions = [...new Set(data["E74_Group"].map(i => i.label))];
-                uniqueInstitutions.forEach(inst => {
-                    const option = document.createElement("option");
-                    option.value = inst;
-                    option.textContent = inst;
-                    institutionSelect.appendChild(option);
-                });
-            }
-        }
-        populateFilters();
     })
     .catch(error => console.error("Error fetching data:", error));
