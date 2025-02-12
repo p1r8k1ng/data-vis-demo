@@ -6,7 +6,7 @@
       "id": "https://example.org/artworks/1",
       "type": "HumanMadeObject",
       "label": "Water Lilies",
-      "classified_as": "Painting",
+      "classified_as": [{ "id": "http://vocab.getty.edu/aat/300033618", "type": "Type", "label": "Painting" }],
       "produced_by": {
         "id": "https://example.org/people/1",
         "type": "Actor",
@@ -22,7 +22,7 @@
       "id": "https://example.org/artworks/2",
       "type": "HumanMadeObject",
       "label": "Starry Night",
-      "classified_as": "Painting",
+      "classified_as": [{ "id": "http://vocab.getty.edu/aat/300033618", "type": "Type", "label": "Painting" }],
       "produced_by": {
         "id": "https://example.org/people/2",
         "type": "Actor",
@@ -33,26 +33,58 @@
         "type": "Group",
         "label": "MoMA"
       }
+    },
+    {
+      "id": "https://example.org/artworks/3",
+      "type": "HumanMadeObject",
+      "label": "The Persistence of Memory",
+      "classified_as": [{ "id": "http://vocab.getty.edu/aat/300033618", "type": "Type", "label": "Painting" }],
+      "produced_by": {
+        "id": "https://example.org/people/4",
+        "type": "Actor",
+        "label": "Salvador Dalí"
+      },
+      "current_location": {
+        "id": "https://example.org/institutions/2",
+        "type": "Group",
+        "label": "MoMA"
+      }
+    },
+    {
+      "id": "https://example.org/artworks/4",
+      "type": "HumanMadeObject",
+      "label": "David",
+      "classified_as": [{ "id": "http://vocab.getty.edu/aat/300047090", "type": "Type", "label": "Sculpture" }],
+      "produced_by": {
+        "id": "https://example.org/people/5",
+        "type": "Actor",
+        "label": "Michelangelo"
+      },
+      "current_location": {
+        "id": "https://example.org/institutions/3",
+        "type": "Group",
+        "label": "Galleria dell'Accademia"
+      }
     }
   ],
   "creators": [
     {
       "id": "https://example.org/people/1",
-      "type": "Actor",
+      "type": "Person",
       "label": "Claude Monet"
     },
     {
       "id": "https://example.org/people/2",
-      "type": "Actor",
+      "type": "Person",
       "label": "Vincent van Gogh",
       "participated_in": [
         {
           "id": "https://example.org/event/1",
-          "type": "Activity",
+          "type": "Event",
           "label": "Impressionist Influence on Van Gogh",
           "carried_out_by": {
             "id": "https://example.org/people/1",
-            "type": "Actor",
+            "type": "Person",
             "label": "Claude Monet"
           }
         }
@@ -60,20 +92,30 @@
     },
     {
       "id": "https://example.org/people/3",
-      "type": "Actor",
+      "type": "Person",
       "label": "J.M.W. Turner",
       "participated_in": [
         {
           "id": "https://example.org/event/2",
-          "type": "Activity",
+          "type": "Event",
           "label": "Turner’s Influence on Monet",
           "carried_out_by": {
             "id": "https://example.org/people/3",
-            "type": "Actor",
+            "type": "Person",
             "label": "J.M.W. Turner"
           }
         }
       ]
+    },
+    {
+      "id": "https://example.org/people/4",
+      "type": "Person",
+      "label": "Salvador Dalí"
+    },
+    {
+      "id": "https://example.org/people/5",
+      "type": "Person",
+      "label": "Michelangelo"
     }
   ],
   "institutions": [
@@ -86,6 +128,11 @@
       "id": "https://example.org/institutions/2",
       "type": "Group",
       "label": "MoMA"
+    },
+    {
+      "id": "https://example.org/institutions/3",
+      "type": "Group",
+      "label": "Galleria dell'Accademia"
     }
   ],
   "events": [
@@ -95,12 +142,12 @@
       "label": "Impressionist Influence on Van Gogh",
       "carried_out_by": {
         "id": "https://example.org/people/1",
-        "type": "Actor",
+        "type": "Person",
         "label": "Claude Monet"
       },
       "participated_by": {
         "id": "https://example.org/people/2",
-        "type": "Actor",
+        "type": "Person",
         "label": "Vincent van Gogh"
       }
     },
@@ -110,13 +157,33 @@
       "label": "Turner’s Influence on Monet",
       "carried_out_by": {
         "id": "https://example.org/people/3",
-        "type": "Actor",
+        "type": "Person",
         "label": "J.M.W. Turner"
       },
       "participated_by": {
         "id": "https://example.org/people/1",
-        "type": "Actor",
+        "type": "Person",
         "label": "Claude Monet"
+      }
+    },
+    {
+      "id": "https://example.org/event/3",
+      "type": "Activity",
+      "label": "Surrealism Movement",
+      "carried_out_by": {
+        "id": "https://example.org/people/4",
+        "type": "Person",
+        "label": "Salvador Dalí"
+      }
+    },
+    {
+      "id": "https://example.org/event/4",
+      "type": "Activity",
+      "label": "Renaissance Art",
+      "carried_out_by": {
+        "id": "https://example.org/people/5",
+        "type": "Person",
+        "label": "Michelangelo"
       }
     }
   ]
