@@ -11,13 +11,21 @@
     <div class="container">
         <aside class="sidebar">
             <h2>Filter Options</h2>
-            <div id="type-filters">
-                <label>Filter by Type:</label>
-                <div id="type-checkboxes"></div>
-            </div>
-            <div id="relationship-filters">
-                <label>Filter by Relationship Type:</label>
-                <div id="relationship-checkboxes"></div>
+            <div>
+                <label for="type">Filter by Type:</label>
+                <select id="type">
+                    <option value="all">All</option>
+                    <option value="Painting">Painting</option>
+                    <option value="Sculpture">Sculpture</option>
+                    <option value="Manuscript">Manuscript</option>
+                    <option value="Drawing">Drawing</option>
+                    <option value="Photograph">Photograph</option>
+                    <option value="Installation">Installation</option>
+                    <option value="Relic">Relic</option>
+                    <option value="Architecture">Architecture</option>
+                    <option value="Digital Art">Digital Art</option>
+                    <option value="Ceramic">Ceramic</option>
+                </select>
             </div>
         </aside>
         <div id="graph"></div>

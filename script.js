@@ -13,26 +13,6 @@ fetch('data.json')
             .attr("class", "tooltip")
             .style("opacity", 0);
 
-        // Extract unique node types and relationship types
-        const uniqueTypes = new Set(data.artefacts.map(node => node.type));
-        const uniqueRelationshipTypes = new Set(data.relationships.map(link => link.type));
-
-        // Generate checkboxes for node types
-        const typeCheckboxes = d3.select("#type-checkboxes")
-            .selectAll("input")
-            .data(Array.from(uniqueTypes))
-            .enter()
-            .append("div")
-            .html(type => `<input type="checkbox" id="type-${type}" data-type="${type}" checked> <label for="type-${type}">${type}</label>`);
-
-        // Generate checkboxes for relationship types
-        const relationshipCheckboxes = d3.select("#relationship-checkboxes")
-            .selectAll("input")
-            .data(Array.from(uniqueRelationshipTypes))
-            .enter()
-            .append("div")
-            .html(type => `<input type="checkbox" id="relationship-${type}" data-type="${type}" checked> <label for="relationship-${type}">${type}</label>`);
-
         // Calculate node degree
         const degrees = {};
         data.artefacts.forEach(node => {
@@ -115,57 +95,5 @@ fetch('data.json')
             if (!event.active) simulation.alphaTarget(0);
             d.fx = null;
             d.fy = null;
-        }
-
-        // Add event listeners for checkboxes to filter nodes and links
-        d3.selectAll("#type-checkboxes input").on("change", function() {
-            updateFilters();
-        });
-
-        d3.selectAll("#relationship-checkboxes input").on("change", function() {
-            updateFilters();
-        });
-
-        function updateFilters() {
-            const selectedTypes = d3.selectAll("#type-checkboxes input:checked")
-                .map(input => input.getAttribute('data-type'))[0];
-
-            const selectedRelationshipTypes = d3.selectAll("#relationship-checkboxes input:checked")
-                .map(input => input.getAttribute('data-type'))[0];
-
-            link.style("display", d => {
-                if (selectedRelationshipTypes.includes(d.type)) {
-                    return null;
-                } else {
-                    return "none";
-                }
-            });
-
-            node.style("display", d => {
-                if (selectedTypes.includes(d.type)) {
-                    return null;
-                } else {
-                    return "none";
-                }
-            });
-
-            // Restart the simulation with the filtered nodes and links
-            simulation.nodes(data.artefacts)
-                .on("tick", () => {
-                    link
-                        .attr("x1", d => d.source.x)
-                        .attr("y1", d => d.source.y)
-                        .attr("x2", d => d.target.x)
-                        .attr("y2", d => d.target.y);
-
-                    node
-                        .attr("cx", d => d.x)
-                        .attr("cy", d => d.y);
-                });
-
-            simulation.force("link")
-                .links(data.relationships.filter(d => selectedRelationshipTypes.includes(d.type)));
-
-            simulation.alpha(1).restart();
         }
     });
