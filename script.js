@@ -1,11 +1,12 @@
 const API_KEY = "renscarklone";
-const PROVIDER = "Rijksmuseum";  // Verified from facets
-const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=*&profile=standard&media=true&rows=50&qf=DATA_PROVIDER:(${encodeURIComponent(PROVIDER)})`;
+const ARTIST = "Rembrandt van Rijn";
+const PROVIDER = "Rijksmuseum";
+const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST)})&qf=DATA_PROVIDER:(${encodeURIComponent(PROVIDER)})`;
 
 fetch(API_URL)
   .then(response => response.json())
   .then(data => {
-    console.log("API Response:", data); // Debug: log API response
+    console.log("API Response:", data);
 
     const width = 900;
     const height = 700;
@@ -15,25 +16,24 @@ fetch(API_URL)
       .attr("width", width)
       .attr("height", height);
 
-    // Process API data into nodes and links
+    // Create tooltip with inline styles.
+    const tooltip = d3.select("body").append("div")
+      .attr("class", "tooltip")
+      .style("opacity", 0)
+      .style("position", "absolute")
+      .style("background-color", "white")
+      .style("border", "1px solid #ccc")
+      .style("padding", "5px")
+      .style("font-size", "12px")
+      .style("pointer-events", "none");
+
     const items = data.items || [];
     const nodes = [];
     const links = [];
     const creatorsMap = {};
     let providerNode = null;
 
-    // Create tooltip with inline styles to ensure it is visible
-    const tooltip = d3.select("body").append("div")
-        .attr("class", "tooltip")
-        .style("opacity", 0)
-        .style("position", "absolute")
-        .style("background-color", "white")
-        .style("border", "1px solid #ccc")
-        .style("padding", "5px")
-        .style("font-size", "12px")
-        .style("pointer-events", "none");
-
-    // Create a common provider node based on the DATA_PROVIDER field
+    // Create a common provider node based on DATA_PROVIDER field.
     if (items.length > 0 && items[0].dataProvider && items[0].dataProvider.length > 0) {
       providerNode = {
         id: `provider-${items[0].dataProvider[0]}`,
@@ -43,55 +43,52 @@ fetch(API_URL)
       nodes.push(providerNode);
     }
 
-    // Process each record to create artwork and creator nodes, linking them to the provider node
+    // Process each record to create artwork and creator nodes.
     items.forEach(item => {
-        if (item.title && item.edmIsShownBy && (item.dcCreator || item.proxy_dc_creator)) {
+      if (item.title && item.edmIsShownBy && item.dcCreator) {
+        // Create artwork node.
         const artworkNode = {
-            id: item.id,
-            label: item.title[0],
-            type: "Artwork",
-            image: item.edmIsShownBy[0],
-            // Use the creator field from dcCreator or fall back to proxy_dc_creator
-            creator: (item.dcCreator && item.dcCreator.length > 0) ? item.dcCreator[0] : (item.proxy_dc_creator && item.proxy_dc_creator.length > 0 ? item.proxy_dc_creator[0] : "Unknown Creator")
+          id: item.id,
+          label: item.title[0],
+          type: "Artwork",
+          image: item.edmIsShownBy[0],
+          creator: item.dcCreator[0]
         };
         nodes.push(artworkNode);
-    
-        // Normalize the creator name for grouping: trim and lowercase
-        const creatorRaw = artworkNode.creator;
-        const creatorNormalized = creatorRaw.trim().toLowerCase();
-    
-        if (!creatorsMap[creatorNormalized]) {
-            creatorsMap[creatorNormalized] = {
-            id: `creator-${creatorNormalized}`,
-            label: creatorRaw, // Use raw value for display
+
+        // Normalize creator name for grouping.
+        const creatorKey = item.dcCreator[0].trim().toLowerCase();
+        if (!creatorsMap[creatorKey]) {
+          creatorsMap[creatorKey] = {
+            id: `creator-${creatorKey}`,
+            label: item.dcCreator[0],
             type: "Creator"
-            };
-            nodes.push(creatorsMap[creatorNormalized]);
+          };
+          nodes.push(creatorsMap[creatorKey]);
         }
-    
+
         // Link artwork to its creator.
         links.push({
-            source: artworkNode.id,
-            target: creatorsMap[creatorNormalized].id,
-            label: "created by"
+          source: artworkNode.id,
+          target: creatorsMap[creatorKey].id,
+          label: "created by"
         });
-    
+
         // Link artwork to the common provider node.
         if (providerNode) {
-            links.push({
+          links.push({
             source: artworkNode.id,
             target: providerNode.id,
             label: "provided by"
-            });
+          });
         }
-        }
+      }
     });
-  
 
-    console.log("Processed nodes:", nodes);  // Debug: check nodes
-    console.log("Processed links:", links);    // Debug: check links
+    console.log("Processed nodes:", nodes);
+    console.log("Processed links:", links);
 
-    // Create SVG patterns for artwork nodes with images 
+    // Create SVG patterns for artwork nodes with images.
     const defs = svg.append("defs");
     nodes.forEach(d => {
       if (d.type === "Artwork" && d.image) {
@@ -101,8 +98,8 @@ fetch(API_URL)
           .attr("height", 1)
           .append("image")
           .attr("xlink:href", d.image)
-          .attr("width", 20)         
-          .attr("height", 20)        
+          .attr("width", 20)         // Adjust as needed
+          .attr("height", 20)        // Adjust as needed
           .attr("preserveAspectRatio", "xMidYMid slice");
       }
     });
@@ -124,78 +121,75 @@ fetch(API_URL)
 
     // Draw nodes.
     const node = svg.append("g")
-    .selectAll("circle")
-    .data(nodes)
-    .join("circle")
-    .attr("r", d => {
+      .selectAll("circle")
+      .data(nodes)
+      .join("circle")
+      .attr("r", d => {
         if (d.type === "Provider") return 12;
         if (d.type === "Creator") return 10;
-        return 12; 
-    })
-    .attr("fill", d => {
+        return 12;  // For artwork nodes.
+      })
+      .attr("fill", d => {
         if (d.type === "Artwork" && d.image) {
-        return "url(#pattern-" + d.id + ")";
+          return "url(#pattern-" + d.id + ")";
         } else if (d.type === "Provider") {
-        return "gold";
+          return "gold";
         } else if (d.type === "Creator") {
-        return "darkgreen";
+          return "darkgreen";
         }
         return "steelblue";
-    })
-    .attr("stroke", d => {
-        if (d.type === "Artwork") return "steelblue"; 
+      })
+      .attr("stroke", d => {
+        if (d.type === "Artwork") return "steelblue";  // Outline same as artwork's base color.
         if (d.type === "Provider") return "gold";
         if (d.type === "Creator") return "darkgreen";
         return "#fff";
-    })
-    .attr("stroke-width", 2)
-    .call(d3.drag()
+      })
+      .attr("stroke-width", 2)
+      .call(d3.drag()
         .on("start", dragStarted)
         .on("drag", dragged)
         .on("end", dragEnded));
 
-
-    // Hover tooltips.
+    // Hover tooltips and node enlargement.
     node.on("mouseover", (event, d) => {
-        // Enlarge the node on hover.
-        d3.select(event.currentTarget)
-          .transition()
-          .duration(200)
-          .attr("r", function() {
-            if (d.type === "Provider") return 12 * 1.5;
-            if (d.type === "Creator") return 10 * 1.5;
-            return 12 * 1.5; // Artwork nodes
-          });
-        
-        // Build tooltip content.
-        let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
-        if (d.type === "Artwork" && d.image) {
-          // Include the image in the tooltip, displayed much bigger.
-          tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
-        }
-        
-        tooltip.transition()
-          .duration(200)
-          .style("opacity", 1);
-        tooltip.html(tooltipContent)
-          .style("left", (event.pageX + 10) + "px")
-          .style("top", (event.pageY + 10) + "px");
-      }).on("mouseout", (event, d) => {
-        // Revert the node size back to its original value.
-        d3.select(event.currentTarget)
-          .transition()
-          .duration(200)
-          .attr("r", function() {
-            if (d.type === "Provider") return 12;
-            if (d.type === "Creator") return 10;
-            return 12;
-          });
-        
-        tooltip.transition()
-          .duration(200)
-          .style("opacity", 0);
-      });
+      // Enlarge the node on hover.
+      d3.select(event.currentTarget)
+        .transition()
+        .duration(200)
+        .attr("r", function() {
+          if (d.type === "Provider") return 12 * 1.5;
+          if (d.type === "Creator") return 10 * 1.5;
+          return 12 * 1.5;
+        });
       
+      // Build tooltip content with larger image for artwork.
+      let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
+      if (d.type === "Artwork" && d.image) {
+        tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
+      }
+      
+      tooltip.transition()
+        .duration(200)
+        .style("opacity", 1);
+      tooltip.html(tooltipContent)
+        .style("left", (event.pageX + 10) + "px")
+        .style("top", (event.pageY + 10) + "px");
+    }).on("mouseout", (event, d) => {
+      // Revert node size.
+      d3.select(event.currentTarget)
+        .transition()
+        .duration(200)
+        .attr("r", function() {
+          if (d.type === "Provider") return 12;
+          if (d.type === "Creator") return 10;
+          return 12;
+        });
+      
+      tooltip.transition()
+        .duration(200)
+        .style("opacity", 0);
+    });
 
     // Update simulation on each tick.
     simulation.on("tick", () => {
@@ -210,7 +204,6 @@ fetch(API_URL)
         .attr("cy", d => d.y);
     });
 
-    // Drag functions.
     function dragStarted(event, d) {
       if (!event.active) simulation.alphaTarget(0.3).restart();
       d.fx = d.x;
