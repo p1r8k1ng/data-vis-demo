@@ -13,6 +13,24 @@ fetch(API_URL)
       .attr("width", width)
       .attr("height", height);
 
+    // Append definitions container for patterns
+    const defs = svg.append("defs");
+
+    // For each artwork node with an image - create  SVG pattern
+    nodes.forEach(d => {
+    if (d.type === "Artwork" && d.image) {
+        defs.append("pattern")
+        .attr("id", "pattern-" + d.id)
+        .attr("width", 1)
+        .attr("height", 1)
+        .append("image")
+        .attr("xlink:href", d.image)
+        .attr("width", 20)         
+        .attr("height", 20)       
+        .attr("preserveAspectRatio", "xMidYMid slice");
+    }
+    });
+
     const tooltip = d3.select("body").append("div")
       .attr("class", "tooltip")
       .style("opacity", 0);
@@ -90,25 +108,30 @@ fetch(API_URL)
 
     // Draw nodes.
     const node = svg.append("g")
-      .selectAll("circle")
-      .data(nodes)
-      .join("circle")
-      .attr("r", d => {
-        if (d.type === "Provider") return 12;
-        if (d.type === "Creator") return 10;
-        return 6;
-      })
-      .attr("fill", d => {
-        if (d.type === "Provider") return "gold";
-        if (d.type === "Creator") return "darkgreen";
-        return "steelblue";
-      })
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 2)
-      .call(d3.drag()
-        .on("start", dragStarted)
-        .on("drag", dragged)
-        .on("end", dragEnded));
+    .selectAll("circle")
+    .data(nodes)
+    .join("circle")
+    .attr("r", d => {
+      if (d.type === "Provider") return 12;
+      if (d.type === "Creator") return 10;
+      return 12;  // Slightly larger for artwork so the image is visible
+    })
+    .attr("fill", d => {
+      if (d.type === "Artwork" && d.image) {
+        return "url(#pattern-" + d.id + ")";
+      } else if (d.type === "Provider") {
+        return "gold";
+      } else if (d.type === "Creator") {
+        return "darkgreen";
+      }
+      return "steelblue";
+    })
+    .attr("stroke", "#fff")
+    .attr("stroke-width", 2)
+    .call(d3.drag()
+      .on("start", dragStarted)
+      .on("drag", dragged)
+      .on("end", dragEnded));
 
     // Hover tooltips.
     node.on("mouseover", (event, d) => {
