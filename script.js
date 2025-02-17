@@ -10,6 +10,7 @@ fetch(API_URL)
     const width = 900;
     const height = 700;
 
+
     const svg = d3.select("#graph")
       .append("svg")
       .attr("width", width)
@@ -21,6 +22,17 @@ fetch(API_URL)
     const links = [];
     const creatorsMap = {};
     let providerNode = null;
+
+    // Create tooltip with inline styles to ensure it is visible
+    const tooltip = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0)
+        .style("position", "absolute")
+        .style("background-color", "white")
+        .style("border", "1px solid #ccc")
+        .style("padding", "5px")
+        .style("font-size", "12px")
+        .style("pointer-events", "none");
 
     // Create a common provider node based on the DATA_PROVIDER field
     if (items.length > 0 && items[0].dataProvider && items[0].dataProvider.length > 0) {
@@ -75,7 +87,7 @@ fetch(API_URL)
     console.log("Processed nodes:", nodes);  // Debug: check nodes
     console.log("Processed links:", links);    // Debug: check links
 
-    // Create SVG patterns for artwork nodes with images (we'll add them back later)
+    // Create SVG patterns for artwork nodes with images 
     const defs = svg.append("defs");
     nodes.forEach(d => {
       if (d.type === "Artwork" && d.image) {
