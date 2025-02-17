@@ -118,10 +118,8 @@ fetch(API_URL)
       })
       .attr("fill", d => {
         if (d.type === "Artwork" && d.image) {
-          // Temporarily use a fallback color to verify nodes display
-          // Return "steelblue" instead of pattern fill for now.
-          // Later, change to: return "url(#pattern-" + d.id + ")";
-          return "steelblue";
+       
+          return "url(#pattern-" + d.id + ")";
         } else if (d.type === "Provider") {
           return "gold";
         } else if (d.type === "Creator") {
