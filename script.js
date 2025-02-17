@@ -1,6 +1,5 @@
-const API_KEY = "renscarklone"; // sam's europeana key
-const QUERY = "painting"; // Change to filter specific types of artworks
-const API_URL = `https://api.europeana.eu/search/v2.json?query=${QUERY}&wskey=${API_KEY}&rows=50&profile=standard`;
+const API_KEY = "renscarklone"; //fix - only fetches connected artists
+const API_URL = `https://api.europeana.eu/record/v2/search.json?query=who:*&profile=standard&media=true&wskey=${API_KEY}&rows=50`;
 
 fetch(API_URL)
     .then(response => response.json())
@@ -18,12 +17,11 @@ fetch(API_URL)
             .style("opacity", 0);
 
         const items = data.items || [];
-
-        // Extract nodes (artworks) and links (shared creators)
         const nodes = [];
         const links = [];
         const creatorsMap = {};
 
+        // Extract artworks and create connections via creators
         items.forEach(item => {
             if (item.title && item.edmIsShownBy && item.dcCreator) {
                 const artworkNode = {
@@ -35,8 +33,8 @@ fetch(API_URL)
                 };
                 nodes.push(artworkNode);
 
-                // Group artworks by creator
                 const creatorName = item.dcCreator[0];
+
                 if (!creatorsMap[creatorName]) {
                     creatorsMap[creatorName] = {
                         id: `creator-${creatorName}`,
@@ -46,7 +44,6 @@ fetch(API_URL)
                     nodes.push(creatorsMap[creatorName]);
                 }
 
-                // Link artwork to creator
                 links.push({
                     source: artworkNode.id,
                     target: creatorsMap[creatorName].id,
@@ -75,7 +72,7 @@ fetch(API_URL)
             .selectAll("circle")
             .data(nodes)
             .join("circle")
-            .attr("r", d => (d.type === "Creator" ? 10 : 6)) // Larger circles for creators
+            .attr("r", d => (d.type === "Creator" ? 10 : 6))
             .attr("fill", d => (d.type === "Creator" ? "darkgreen" : "steelblue"))
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
