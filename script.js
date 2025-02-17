@@ -1,23 +1,67 @@
 const API_KEY = "renscarklone";
-const ARTIST_QUERY = "Rembrandt van Rijn";  // Query for Rembrandt
+const ARTIST_QUERY = "Rembrandt van Rijn";  // The artist 
 const PROVIDER = "Rijksmuseum";              // Using Rijksmuseum as DATA_PROVIDER
-// 
-const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=standard&media=true&rows=50`;
+const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=standard&media=true&rows=50&sort=score+desc`;
+
+// Helper: Get title with fallback.
+function getTitle(item) {
+  if (item.title && item.title.length > 0) return item.title[0];
+  if (item.dcTitleLangAware && item.dcTitleLangAware.def && item.dcTitleLangAware.def.length > 0)
+    return item.dcTitleLangAware.def[0];
+  return "Untitled";
+}
+
+// Get creator label with fallback.
+// It first checks the language-aware field, then dcCreator,
+// and if the candidate is "anonymous"/"anoniem" or looks like a URL, it falls back to ARTIST_QUERY.
+function getCreatorLabel(item) {
+  if (item.dcCreatorLangAware) {
+    const langKeys = Object.keys(item.dcCreatorLangAware);
+    if (langKeys.length > 0 && item.dcCreatorLangAware[langKeys[0]].length > 0) {
+      const label = item.dcCreatorLangAware[langKeys[0]][0];
+      if (label.toLowerCase() === "anonymous" || label.toLowerCase() === "anoniem") {
+        return ARTIST_QUERY;
+      }
+      return label;
+    }
+  }
+  if (item.dcCreator && item.dcCreator.length > 0) {
+    const candidate = item.dcCreator[0];
+    if (candidate.toLowerCase() === "anonymous" || candidate.toLowerCase() === "anoniem") {
+      return ARTIST_QUERY;
+    }
+    if (candidate.startsWith("http")) {
+      if (item.proxy_dc_creatorLangAware) {
+        const keys = Object.keys(item.proxy_dc_creatorLangAware);
+        if (keys.length > 0 && item.proxy_dc_creatorLangAware[keys[0]].length > 0) {
+          return item.proxy_dc_creatorLangAware[keys[0]][0];
+        }
+      }
+      if (item.proxy_dc_creator && item.proxy_dc_creator.length > 0) {
+        return item.proxy_dc_creator[0];
+      }
+      return ARTIST_QUERY;
+    }
+    return candidate;
+  }
+  return ARTIST_QUERY;
+}
 
 fetch(API_URL)
   .then(response => response.json())
   .then(data => {
-    console.log("API Response:", data); // Debug: log API response
+    console.log("API Response:", data);
 
     const width = 900;
     const height = 700;
 
+    // Create the SVG container.
     const svg = d3.select("#graph")
       .append("svg")
       .attr("width", width)
       .attr("height", height);
 
-    // Create tooltip with inline styles
+    // Create a tooltip with inline styles.
     const tooltip = d3.select("body").append("div")
       .attr("class", "tooltip")
       .style("opacity", 0)
@@ -28,45 +72,6 @@ fetch(API_URL)
       .style("font-size", "12px")
       .style("pointer-events", "none");
 
-    // Helper: Get title with fallback
-    function getTitle(item) {
-      if (item.title && item.title.length > 0) return item.title[0];
-      if (item.dcTitleLangAware && item.dcTitleLangAware.def && item.dcTitleLangAware.def.length > 0)
-        return item.dcTitleLangAware.def[0];
-      // Also try language-specific keys (e.g., nl) if available
-      if (item.dcTitleLangAware && item.dcTitleLangAware.nl && item.dcTitleLangAware.nl.length > 0)
-        return item.dcTitleLangAware.nl[0];
-      return "Untitled";
-    }
-
-    // Helper: Get creator label with fallback (similar to our previous approach)
-    function getCreatorLabel(item) {
-      if (item.dcCreatorLangAware) {
-        const langKeys = Object.keys(item.dcCreatorLangAware);
-        if (langKeys.length > 0 && item.dcCreatorLangAware[langKeys[0]].length > 0) {
-          return item.dcCreatorLangAware[langKeys[0]][0];
-        }
-      }
-      if (item.dcCreator && item.dcCreator.length > 0) {
-        const candidate = item.dcCreator[0];
-        if (candidate.startsWith("http")) {
-          if (item.proxy_dc_creatorLangAware) {
-            const keys = Object.keys(item.proxy_dc_creatorLangAware);
-            if (keys.length > 0 && item.proxy_dc_creatorLangAware[keys[0]].length > 0) {
-              return item.proxy_dc_creatorLangAware[keys[0]][0];
-            }
-          }
-          if (item.proxy_dc_creator && item.proxy_dc_creator.length > 0) {
-            return item.proxy_dc_creator[0];
-          }
-          return "Unknown Creator";
-        }
-        return candidate;
-      }
-      return "Unknown Creator";
-    }
-
-    // Process API data into nodes and links
     const items = data.items || [];
     const nodes = [];
     const links = [];
@@ -83,13 +88,13 @@ fetch(API_URL)
       nodes.push(providerNode);
     }
 
-    // P
+    // Process each record to create artwork and creator nodes.
     items.forEach(item => {
-      // .
+      // Only process records that have an image.
       if (item.edmIsShownBy && item.edmIsShownBy.length > 0) {
         const title = getTitle(item);
         const creatorLabel = getCreatorLabel(item);
-        
+
         const artworkNode = {
           id: item.id,
           label: title,
@@ -99,7 +104,7 @@ fetch(API_URL)
         };
         nodes.push(artworkNode);
 
-        // Normalize the creator name for grouping.
+        // Normalise the creator label for grouping.
         const creatorKey = creatorLabel.trim().toLowerCase();
         if (!creatorsMap[creatorKey]) {
           creatorsMap[creatorKey] = {
@@ -128,6 +133,17 @@ fetch(API_URL)
       }
     });
 
+    // link creator nodes directly to the provider node.
+    Object.keys(creatorsMap).forEach(key => {
+      if (providerNode) {
+        links.push({
+          source: creatorsMap[key].id,
+          target: providerNode.id,
+          label: "affiliated with"
+        });
+      }
+    });
+
     console.log("Processed nodes:", nodes);
     console.log("Processed links:", links);
 
@@ -141,8 +157,8 @@ fetch(API_URL)
           .attr("height", 1)
           .append("image")
           .attr("xlink:href", d.image)
-          .attr("width", 20)  // Adjust size as needed
-          .attr("height", 20) // Adjust size as needed
+          .attr("width", 20)         // Adjust size as needed
+          .attr("height", 20)        // Adjust size as needed
           .attr("preserveAspectRatio", "xMidYMid slice");
       }
     });
@@ -170,7 +186,7 @@ fetch(API_URL)
       .attr("r", d => {
         if (d.type === "Provider") return 12;
         if (d.type === "Creator") return 10;
-        return 12;
+        return 12;  // For artwork nodes.
       })
       .attr("fill", d => {
         if (d.type === "Artwork" && d.image) {
@@ -183,7 +199,7 @@ fetch(API_URL)
         return "steelblue";
       })
       .attr("stroke", d => {
-        if (d.type === "Artwork") return "steelblue";  // Outline matches artwork fill color.
+        if (d.type === "Artwork") return "steelblue";  // Outline same as artwork's base color.
         if (d.type === "Provider") return "gold";
         if (d.type === "Creator") return "darkgreen";
         return "#fff";
@@ -199,7 +215,7 @@ fetch(API_URL)
       d3.select(event.currentTarget)
         .transition()
         .duration(200)
-        .attr("r", function() {
+        .attr("r", function () {
           if (d.type === "Provider") return 12 * 1.5;
           if (d.type === "Creator") return 10 * 1.5;
           return 12 * 1.5;
@@ -209,8 +225,52 @@ fetch(API_URL)
       if (d.type === "Artwork" && d.image) {
         tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
       }
-      
+
       tooltip.transition()
         .duration(200)
         .style("opacity", 1);
-      tooltip.html(tooltipCont
+      tooltip.html(tooltipContent)
+        .style("left", (event.pageX + 10) + "px")
+        .style("top", (event.pageY + 10) + "px");
+    }).on("mouseout", (event, d) => {
+      d3.select(event.currentTarget)
+        .transition()
+        .duration(200)
+        .attr("r", function () {
+          if (d.type === "Provider") return 12;
+          if (d.type === "Creator") return 10;
+          return 12;
+        });
+
+      tooltip.transition()
+        .duration(200)
+        .style("opacity", 0);
+    });
+
+    simulation.on("tick", () => {
+      link
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+      node
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y);
+    });
+
+    function dragStarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+    function dragEnded(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+  })
+  .catch(error => console.error("Error fetching data:", error));
