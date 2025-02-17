@@ -1,5 +1,6 @@
-const API_KEY = "renscarklone"; // Sam's Europeana key
-const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=art&rows=50`;
+const API_KEY = "renscarklone"; // sam's europeana key
+const QUERY = "painting"; // Change to filter specific types of artworks
+const API_URL = `https://api.europeana.eu/search/v2.json?query=${QUERY}&wskey=${API_KEY}&rows=50&profile=standard`;
 
 fetch(API_URL)
     .then(response => response.json())
@@ -16,47 +17,42 @@ fetch(API_URL)
             .attr("class", "tooltip")
             .style("opacity", 0);
 
-        // Process API Data into Nodes and Links
+        const items = data.items || [];
+
+        // Extract nodes (artworks) and links (shared creators)
         const nodes = [];
         const links = [];
+        const creatorsMap = {};
 
-        const artefactMap = {}; // Store artefact info
+        items.forEach(item => {
+            if (item.title && item.edmIsShownBy && item.dcCreator) {
+                const artworkNode = {
+                    id: item.id,
+                    label: item.title[0],
+                    type: "Artwork",
+                    image: item.edmIsShownBy[0],
+                    creator: item.dcCreator[0]
+                };
+                nodes.push(artworkNode);
 
-        data.items.forEach((item, index) => {
-            if (!item.title || !item.guid) return; // Skip if no title or ID
-
-            let artefact = {
-                id: item.guid,
-                title: item.title[0],
-                type: "Artefact",
-                degree: 0
-            };
-
-            nodes.push(artefact);
-            artefactMap[item.guid] = artefact;
-
-            if (item.edmAgent) {
-                item.edmAgent.forEach((creator, cIndex) => {
-                    let creatorId = `${item.guid}-creator-${cIndex}`;
-                    let creatorNode = {
-                        id: creatorId,
-                        title: creator.prefLabel || "Unknown Creator",
-                        type: "Creator",
-                        degree: 0
+                // Group artworks by creator
+                const creatorName = item.dcCreator[0];
+                if (!creatorsMap[creatorName]) {
+                    creatorsMap[creatorName] = {
+                        id: `creator-${creatorName}`,
+                        label: creatorName,
+                        type: "Creator"
                     };
+                    nodes.push(creatorsMap[creatorName]);
+                }
 
-                    nodes.push(creatorNode);
-                    links.push({ source: artefact.id, target: creatorId, label: "created by" });
-
-                    artefact.degree += 1;
-                    creatorNode.degree += 1;
+                // Link artwork to creator
+                links.push({
+                    source: artworkNode.id,
+                    target: creatorsMap[creatorName].id,
+                    label: "created by"
                 });
             }
-        });
-
-        // Calculate node sizes
-        nodes.forEach(node => {
-            node.degree = node.degree || 0;
         });
 
         // Set up force simulation
@@ -79,8 +75,8 @@ fetch(API_URL)
             .selectAll("circle")
             .data(nodes)
             .join("circle")
-            .attr("r", d => 6 + d.degree * 4) // Size based on connections
-            .attr("fill", d => (d.type === "Artefact" ? "steelblue" : "darkgreen"))
+            .attr("r", d => (d.type === "Creator" ? 10 : 6)) // Larger circles for creators
+            .attr("fill", d => (d.type === "Creator" ? "darkgreen" : "steelblue"))
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
             .call(d3.drag()
@@ -93,7 +89,7 @@ fetch(API_URL)
             tooltip.transition()
                 .duration(200)
                 .style("opacity", 1);
-            tooltip.html(`<strong>${d.title}</strong><br>Type: ${d.type}<br>Connections: ${d.degree}`)
+            tooltip.html(`<strong>${d.label}</strong><br>Type: ${d.type}`)
                 .style("left", (event.pageX + 10) + "px")
                 .style("top", (event.pageY + 10) + "px");
         }).on("mouseout", () => {
