@@ -46,43 +46,48 @@ fetch(API_URL)
 
     // Process each record to create artwork and creator nodes, linking them to the provider node
     items.forEach(item => {
-      if (item.title && item.edmIsShownBy && item.dcCreator) {
+        if (item.title && item.edmIsShownBy && (item.dcCreator || item.proxy_dc_creator)) {
         const artworkNode = {
-          id: item.id,
-          label: item.title[0],
-          type: "Artwork",
-          image: item.edmIsShownBy[0],
-          creator: item.dcCreator[0]
+            id: item.id,
+            label: item.title[0],
+            type: "Artwork",
+            image: item.edmIsShownBy[0],
+            // Use the creator field from dcCreator or fall back to proxy_dc_creator
+            creator: (item.dcCreator && item.dcCreator.length > 0) ? item.dcCreator[0] : (item.proxy_dc_creator && item.proxy_dc_creator.length > 0 ? item.proxy_dc_creator[0] : "Unknown Creator")
         };
         nodes.push(artworkNode);
-
-        const creatorName = item.dcCreator[0];
-        if (!creatorsMap[creatorName]) {
-          creatorsMap[creatorName] = {
-            id: `creator-${creatorName}`,
-            label: creatorName,
+    
+        // Normalize the creator name for grouping: trim and lowercase
+        const creatorRaw = artworkNode.creator;
+        const creatorNormalized = creatorRaw.trim().toLowerCase();
+    
+        if (!creatorsMap[creatorNormalized]) {
+            creatorsMap[creatorNormalized] = {
+            id: `creator-${creatorNormalized}`,
+            label: creatorRaw, // Use raw value for display
             type: "Creator"
-          };
-          nodes.push(creatorsMap[creatorName]);
+            };
+            nodes.push(creatorsMap[creatorNormalized]);
         }
-
+    
         // Link artwork to its creator.
         links.push({
-          source: artworkNode.id,
-          target: creatorsMap[creatorName].id,
-          label: "created by"
+            source: artworkNode.id,
+            target: creatorsMap[creatorNormalized].id,
+            label: "created by"
         });
-
+    
         // Link artwork to the common provider node.
         if (providerNode) {
-          links.push({
+            links.push({
             source: artworkNode.id,
             target: providerNode.id,
             label: "provided by"
-          });
+            });
         }
-      }
+        }
     });
+  
 
     console.log("Processed nodes:", nodes);  // Debug: check nodes
     console.log("Processed links:", links);    // Debug: check links
