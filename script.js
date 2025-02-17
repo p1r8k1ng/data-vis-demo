@@ -1,6 +1,8 @@
 const API_KEY = "renscarklone";
-const INSTITUTION = "Rijksmuseum";  // filter by institution
-const API_URL = `https://api.europeana.eu/record/v2/search.json?query=who:*&profile=standard&media=true&wskey=${API_KEY}&rows=50&qf=provider:"${INSTITUTION}"`;
+const COUNTRY = "Netherlands"; // Filter by country
+const PROVIDER = "Netherlands Institute for Sound & Vision"; // Filter by provider
+
+const API_URL = `https://api.europeana.eu/record/v2/search.json?query=who:*&profile=standard&media=true&wskey=${API_KEY}&rows=50&qf=country:"${COUNTRY}"&qf=provider:"${PROVIDER}"`;
 
 fetch(API_URL)
     .then(response => response.json())
@@ -21,19 +23,19 @@ fetch(API_URL)
         const nodes = [];
         const links = [];
         const creatorsMap = {};
-        let institutionNode = null;
+        let providerNode = null;
 
-        // Institution Node (All artworks must share this)
+        // Add Provider (Institution) Node
         if (items.length > 0 && items[0].provider) {
-            institutionNode = {
-                id: `institution-${items[0].provider}`,
+            providerNode = {
+                id: `provider-${items[0].provider}`,
                 label: items[0].provider,
                 type: "Institution"
             };
-            nodes.push(institutionNode);
+            nodes.push(providerNode);
         }
 
-        // Extract artworks and create connections via creators & institution
+        // Extract artworks and create connections via creators & provider
         items.forEach(item => {
             if (item.title && item.edmIsShownBy && item.dcCreator) {
                 const artworkNode = {
@@ -62,12 +64,12 @@ fetch(API_URL)
                     label: "created by"
                 });
 
-                // Link all artworks to the shared institution
-                if (institutionNode) {
+                // Link all artworks to the shared provider
+                if (providerNode) {
                     links.push({
                         source: artworkNode.id,
-                        target: institutionNode.id,
-                        label: "held by"
+                        target: providerNode.id,
+                        label: "provided by"
                     });
                 }
             }
@@ -94,9 +96,9 @@ fetch(API_URL)
             .data(nodes)
             .join("circle")
             .attr("r", d => {
-                if (d.type === "Institution") return 12; // Biggest node
-                if (d.type === "Creator") return 10; // Medium node
-                return 6; // Artworks smaller
+                if (d.type === "Institution") return 12;
+                if (d.type === "Creator") return 10;
+                return 6;
             })
             .attr("fill", d => {
                 if (d.type === "Institution") return "gold";
