@@ -1,5 +1,6 @@
-const API_KEY = "renscarklone"; //fix - only fetches connected artists
-const API_URL = `https://api.europeana.eu/record/v2/search.json?query=who:*&profile=standard&media=true&wskey=${API_KEY}&rows=50`;
+const API_KEY = "renscarklone";
+const INSTITUTION = "Rijksmuseum";  // filter by institution
+const API_URL = `https://api.europeana.eu/record/v2/search.json?query=who:*&profile=standard&media=true&wskey=${API_KEY}&rows=50&qf=provider:"${INSTITUTION}"`;
 
 fetch(API_URL)
     .then(response => response.json())
@@ -20,8 +21,19 @@ fetch(API_URL)
         const nodes = [];
         const links = [];
         const creatorsMap = {};
+        let institutionNode = null;
 
-        // Extract artworks and create connections via creators
+        // Institution Node (All artworks must share this)
+        if (items.length > 0 && items[0].provider) {
+            institutionNode = {
+                id: `institution-${items[0].provider}`,
+                label: items[0].provider,
+                type: "Institution"
+            };
+            nodes.push(institutionNode);
+        }
+
+        // Extract artworks and create connections via creators & institution
         items.forEach(item => {
             if (item.title && item.edmIsShownBy && item.dcCreator) {
                 const artworkNode = {
@@ -49,6 +61,15 @@ fetch(API_URL)
                     target: creatorsMap[creatorName].id,
                     label: "created by"
                 });
+
+                // Link all artworks to the shared institution
+                if (institutionNode) {
+                    links.push({
+                        source: artworkNode.id,
+                        target: institutionNode.id,
+                        label: "held by"
+                    });
+                }
             }
         });
 
@@ -72,8 +93,16 @@ fetch(API_URL)
             .selectAll("circle")
             .data(nodes)
             .join("circle")
-            .attr("r", d => (d.type === "Creator" ? 10 : 6))
-            .attr("fill", d => (d.type === "Creator" ? "darkgreen" : "steelblue"))
+            .attr("r", d => {
+                if (d.type === "Institution") return 12; // Biggest node
+                if (d.type === "Creator") return 10; // Medium node
+                return 6; // Artworks smaller
+            })
+            .attr("fill", d => {
+                if (d.type === "Institution") return "gold";
+                if (d.type === "Creator") return "darkgreen";
+                return "steelblue";
+            })
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
             .call(d3.drag()
