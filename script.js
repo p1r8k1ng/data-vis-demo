@@ -5,19 +5,15 @@ const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}
 fetch(API_URL)
   .then(response => response.json())
   .then(data => {
+    console.log("API Response:", data); // Debug: log API response
+
     const width = 900;
     const height = 700;
 
-    // Create SVG container
     const svg = d3.select("#graph")
       .append("svg")
       .attr("width", width)
       .attr("height", height);
-
-    // Create tooltip container
-    const tooltip = d3.select("body").append("div")
-      .attr("class", "tooltip")
-      .style("opacity", 0);
 
     // Process API data into nodes and links
     const items = data.items || [];
@@ -76,9 +72,11 @@ fetch(API_URL)
       }
     });
 
-    // Nodes are populated, create definitions (patterns) for artwork images
-    const defs = svg.append("defs");
+    console.log("Processed nodes:", nodes);  // Debug: check nodes
+    console.log("Processed links:", links);    // Debug: check links
 
+    // Create SVG patterns for artwork nodes with images (we'll add them back later)
+    const defs = svg.append("defs");
     nodes.forEach(d => {
       if (d.type === "Artwork" && d.image) {
         defs.append("pattern")
@@ -87,8 +85,8 @@ fetch(API_URL)
           .attr("height", 1)
           .append("image")
           .attr("xlink:href", d.image)
-          .attr("width", 20)         // Adjust the size as needed
-          .attr("height", 20)        // Adjust the size as needed
+          .attr("width", 20)         
+          .attr("height", 20)        
           .attr("preserveAspectRatio", "xMidYMid slice");
       }
     });
@@ -116,11 +114,14 @@ fetch(API_URL)
       .attr("r", d => {
         if (d.type === "Provider") return 12;
         if (d.type === "Creator") return 10;
-        return 12;  // 
+        return 12;  // Slightly larger for artwork so the image is visible
       })
       .attr("fill", d => {
         if (d.type === "Artwork" && d.image) {
-          return "url(#pattern-" + d.id + ")";
+          // Temporarily use a fallback color to verify nodes display
+          // Return "steelblue" instead of pattern fill for now.
+          // Later, change to: return "url(#pattern-" + d.id + ")";
+          return "steelblue";
         } else if (d.type === "Provider") {
           return "gold";
         } else if (d.type === "Creator") {
