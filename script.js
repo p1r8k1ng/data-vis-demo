@@ -1,5 +1,5 @@
 const API_KEY = "renscarklone";
-const PROVIDER = "Rijksmuseum";  // Verified from the facets
+const PROVIDER = "Rijksmuseum";  // Verified from facets
 const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=*&profile=standard&media=true&rows=50&qf=DATA_PROVIDER:(${encodeURIComponent(PROVIDER)})`;
 
 fetch(API_URL)
@@ -8,33 +8,18 @@ fetch(API_URL)
     const width = 900;
     const height = 700;
 
+    // Create SVG container
     const svg = d3.select("#graph")
       .append("svg")
       .attr("width", width)
       .attr("height", height);
 
-    // Append definitions container for patterns
-    const defs = svg.append("defs");
-
-    // For each artwork node with an image - create  SVG pattern
-    nodes.forEach(d => {
-    if (d.type === "Artwork" && d.image) {
-        defs.append("pattern")
-        .attr("id", "pattern-" + d.id)
-        .attr("width", 1)
-        .attr("height", 1)
-        .append("image")
-        .attr("xlink:href", d.image)
-        .attr("width", 20)         
-        .attr("height", 20)       
-        .attr("preserveAspectRatio", "xMidYMid slice");
-    }
-    });
-
+    // Create tooltip container
     const tooltip = d3.select("body").append("div")
       .attr("class", "tooltip")
       .style("opacity", 0);
 
+    // Process API data into nodes and links
     const items = data.items || [];
     const nodes = [];
     const links = [];
@@ -91,6 +76,23 @@ fetch(API_URL)
       }
     });
 
+    // Nodes are populated, create definitions (patterns) for artwork images
+    const defs = svg.append("defs");
+
+    nodes.forEach(d => {
+      if (d.type === "Artwork" && d.image) {
+        defs.append("pattern")
+          .attr("id", "pattern-" + d.id)
+          .attr("width", 1)
+          .attr("height", 1)
+          .append("image")
+          .attr("xlink:href", d.image)
+          .attr("width", 20)         // Adjust the size as needed
+          .attr("height", 20)        // Adjust the size as needed
+          .attr("preserveAspectRatio", "xMidYMid slice");
+      }
+    });
+
     // Set up force simulation.
     const simulation = d3.forceSimulation(nodes)
       .force("link", d3.forceLink(links).id(d => d.id).distance(150))
@@ -108,30 +110,30 @@ fetch(API_URL)
 
     // Draw nodes.
     const node = svg.append("g")
-    .selectAll("circle")
-    .data(nodes)
-    .join("circle")
-    .attr("r", d => {
-      if (d.type === "Provider") return 12;
-      if (d.type === "Creator") return 10;
-      return 12;  // Slightly larger for artwork so the image is visible
-    })
-    .attr("fill", d => {
-      if (d.type === "Artwork" && d.image) {
-        return "url(#pattern-" + d.id + ")";
-      } else if (d.type === "Provider") {
-        return "gold";
-      } else if (d.type === "Creator") {
-        return "darkgreen";
-      }
-      return "steelblue";
-    })
-    .attr("stroke", "#fff")
-    .attr("stroke-width", 2)
-    .call(d3.drag()
-      .on("start", dragStarted)
-      .on("drag", dragged)
-      .on("end", dragEnded));
+      .selectAll("circle")
+      .data(nodes)
+      .join("circle")
+      .attr("r", d => {
+        if (d.type === "Provider") return 12;
+        if (d.type === "Creator") return 10;
+        return 12;  // 
+      })
+      .attr("fill", d => {
+        if (d.type === "Artwork" && d.image) {
+          return "url(#pattern-" + d.id + ")";
+        } else if (d.type === "Provider") {
+          return "gold";
+        } else if (d.type === "Creator") {
+          return "darkgreen";
+        }
+        return "steelblue";
+      })
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 2)
+      .call(d3.drag()
+        .on("start", dragStarted)
+        .on("drag", dragged)
+        .on("end", dragEnded));
 
     // Hover tooltips.
     node.on("mouseover", (event, d) => {
@@ -147,7 +149,7 @@ fetch(API_URL)
         .style("opacity", 0);
     });
 
-    // Update simulation.
+    // Update simulation on each tick.
     simulation.on("tick", () => {
       link
         .attr("x1", d => d.source.x)
