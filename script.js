@@ -1,6 +1,7 @@
-const API_KEY = "renscarklone";
-const COUNTRY = "Netherlands"; // Filter by country
-const PROVIDER = "Netherlands Institute for Sound & Vision"; // Filter by provider
+const providerName = "Netherlands Institute for Sound & Vision";
+const encodedProvider = encodeURIComponent(providerName);
+const API_URL = `https://api.europeana.eu/record/v2/search.json?query=who:*&profile=standard&media=true&wskey=renscarklone&rows=50&qf=country:"Netherlands"&qf=provider:"${encodedProvider}"`;
+
 
 const API_URL = `https://api.europeana.eu/record/v2/search.json?query=who:*&profile=standard&media=true&wskey=${API_KEY}&rows=50&qf=country:"${COUNTRY}"&qf=provider:"${PROVIDER}"`;
 
