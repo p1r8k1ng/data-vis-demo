@@ -1,5 +1,5 @@
 const API_KEY = "renscarklone";
-const ARTIST_QUERY = "Rembrandt van Rijn";  // The artist 
+const ARTIST_QUERY = "Rembrandt van Rijn";  
 const PROVIDER = "Rijksmuseum";              // Using Rijksmuseum as DATA_PROVIDER
 const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=standard&media=true&rows=50&sort=score+desc`;
 
@@ -11,9 +11,7 @@ function getTitle(item) {
   return "Untitled";
 }
 
-// Get creator label with fallback.
-// It first checks the language-aware field, then dcCreator,
-// and if the candidate is "anonymous"/"anoniem" or looks like a URL, it falls back to ARTIST_QUERY.
+// Helper: Get a human-readable creator label.
 function getCreatorLabel(item) {
   if (item.dcCreatorLangAware) {
     const langKeys = Object.keys(item.dcCreatorLangAware);
@@ -94,7 +92,7 @@ fetch(API_URL)
       if (item.edmIsShownBy && item.edmIsShownBy.length > 0) {
         const title = getTitle(item);
         const creatorLabel = getCreatorLabel(item);
-
+        
         const artworkNode = {
           id: item.id,
           label: title,
@@ -104,7 +102,7 @@ fetch(API_URL)
         };
         nodes.push(artworkNode);
 
-        // Normalise the creator label for grouping.
+        // Normalize the creator label for grouping.
         const creatorKey = creatorLabel.trim().toLowerCase();
         if (!creatorsMap[creatorKey]) {
           creatorsMap[creatorKey] = {
@@ -121,11 +119,10 @@ fetch(API_URL)
           target: creatorsMap[creatorKey].id,
           label: "created by"
         });
-
       }
     });
 
-    // link creator nodes directly to the provider node.
+    // Now, link each creator node to the provider node.
     Object.keys(creatorsMap).forEach(key => {
       if (providerNode) {
         links.push({
@@ -149,8 +146,8 @@ fetch(API_URL)
           .attr("height", 1)
           .append("image")
           .attr("xlink:href", d.image)
-          .attr("width", 20)         // Adjust size as needed
-          .attr("height", 20)        // Adjust size as needed
+          .attr("width", 20)         // Adjust as needed
+          .attr("height", 20)        // Adjust as needed
           .attr("preserveAspectRatio", "xMidYMid slice");
       }
     });
@@ -191,7 +188,7 @@ fetch(API_URL)
         return "steelblue";
       })
       .attr("stroke", d => {
-        if (d.type === "Artwork") return "steelblue";  // Outline same as artwork's base color.
+        if (d.type === "Artwork") return "steelblue";
         if (d.type === "Provider") return "gold";
         if (d.type === "Creator") return "darkgreen";
         return "#fff";
@@ -207,7 +204,7 @@ fetch(API_URL)
       d3.select(event.currentTarget)
         .transition()
         .duration(200)
-        .attr("r", function () {
+        .attr("r", function() {
           if (d.type === "Provider") return 12 * 1.5;
           if (d.type === "Creator") return 10 * 1.5;
           return 12 * 1.5;
@@ -228,7 +225,7 @@ fetch(API_URL)
       d3.select(event.currentTarget)
         .transition()
         .duration(200)
-        .attr("r", function () {
+        .attr("r", function() {
           if (d.type === "Provider") return 12;
           if (d.type === "Creator") return 10;
           return 12;
