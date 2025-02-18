@@ -122,14 +122,6 @@ fetch(API_URL)
           label: "created by"
         });
 
-        // Link artwork to the common provider node.
-        if (providerNode) {
-          links.push({
-            source: artworkNode.id,
-            target: providerNode.id,
-            label: "provided by"
-          });
-        }
       }
     });
 
