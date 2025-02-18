@@ -1,5 +1,5 @@
 const API_KEY = "renscarklone";
-const ARTIST_QUERY = "Rembrandt van Rijn";  // The artist 
+const ARTIST_QUERY = "Rembrandt van Rijn";  // The artist we're targeting
 const PROVIDER = "Rijksmuseum";              // Using Rijksmuseum as DATA_PROVIDER
 const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=standard&media=true&rows=50&sort=score+desc`;
 
@@ -11,16 +11,14 @@ function getTitle(item) {
   return "Untitled";
 }
 
-// Get creator label with fallback.
-// It first checks the language-aware field, then dcCreator,
-// and if the candidate is "anonymous"/"anoniem" or looks like a URL, it falls back to ARTIST_QUERY.
+// Helper: Get a human-readable creator label.
 function getCreatorLabel(item) {
   if (item.dcCreatorLangAware) {
     const langKeys = Object.keys(item.dcCreatorLangAware);
     if (langKeys.length > 0 && item.dcCreatorLangAware[langKeys[0]].length > 0) {
       const label = item.dcCreatorLangAware[langKeys[0]][0];
       if (label.toLowerCase() === "anonymous" || label.toLowerCase() === "anoniem") {
-        return ARTIST_QUERY;
+         return ARTIST_QUERY;
       }
       return label;
     }
@@ -47,6 +45,15 @@ function getCreatorLabel(item) {
   return ARTIST_QUERY;
 }
 
+// Helper: Get time period label from edmTimespanLabel.
+function getTimePeriod(item) {
+  if (item.edmTimespanLabel && item.edmTimespanLabel.length > 0) {
+    // Assume the first value's "def" property is our time period.
+    return item.edmTimespanLabel[0].def || "Unknown Period";
+  }
+  return "Unknown Period";
+}
+
 fetch(API_URL)
   .then(response => response.json())
   .then(data => {
@@ -61,7 +68,7 @@ fetch(API_URL)
       .attr("width", width)
       .attr("height", height);
 
-    // Create a tooltip with inline styles.
+    // Create a tooltip.
     const tooltip = d3.select("body").append("div")
       .attr("class", "tooltip")
       .style("opacity", 0)
@@ -76,9 +83,10 @@ fetch(API_URL)
     const nodes = [];
     const links = [];
     const creatorsMap = {};
+
     let providerNode = null;
 
-    // Create a common provider node based on DATA_PROVIDER.
+    // Create the provider (museum) node.
     if (items.length > 0 && items[0].dataProvider && items[0].dataProvider.length > 0) {
       providerNode = {
         id: `provider-${items[0].dataProvider[0]}`,
@@ -88,23 +96,28 @@ fetch(API_URL)
       nodes.push(providerNode);
     }
 
-    // Process each record to create artwork and creator nodes.
+    // building a grouping for artworks by creator and time period.
+    // Structure: { creatorKey: { timePeriod: [artworkNodes] } }
+    const creatorTimeMap = {};
+
+    // Process each record to create artwork nodes and link them to time period.
     items.forEach(item => {
-      // Only process records that have an image.
       if (item.edmIsShownBy && item.edmIsShownBy.length > 0) {
         const title = getTitle(item);
         const creatorLabel = getCreatorLabel(item);
+        const timePeriod = getTimePeriod(item);
 
         const artworkNode = {
           id: item.id,
           label: title,
           type: "Artwork",
           image: item.edmIsShownBy[0],
-          creator: creatorLabel
+          creator: creatorLabel,
+          timePeriod: timePeriod
         };
         nodes.push(artworkNode);
 
-        // Normalise the creator label for grouping.
+        // Normalise creator for grouping.
         const creatorKey = creatorLabel.trim().toLowerCase();
         if (!creatorsMap[creatorKey]) {
           creatorsMap[creatorKey] = {
@@ -114,17 +127,51 @@ fetch(API_URL)
           };
           nodes.push(creatorsMap[creatorKey]);
         }
+        
 
-        // Link artwork to its creator.
-        links.push({
-          source: artworkNode.id,
-          target: creatorsMap[creatorKey].id,
-          label: "created by"
-        });
+        // Build creatorTimeMap.
+        if (!creatorTimeMap[creatorKey]) {
+          creatorTimeMap[creatorKey] = {};
+        }
+        if (!creatorTimeMap[creatorKey][timePeriod]) {
+          creatorTimeMap[creatorKey][timePeriod] = [];
+        }
+        creatorTimeMap[creatorKey][timePeriod].push(artworkNode);
       }
     });
 
-    // link creator nodes directly to the provider node.
+    // create a TimePeriod node.
+    //  link the Creator node to the TimePeriod node,
+    //  link  TimePeriod node to each artwork.
+    Object.keys(creatorTimeMap).forEach(creatorKey => {
+      const timeObj = creatorTimeMap[creatorKey];
+      Object.keys(timeObj).forEach(timePeriod => {
+        // Create a unique time node per creator & time period.
+        const timeNodeId = `time-${creatorKey}-${timePeriod.replace(/\s+/g, "")}`;
+        const timeNode = {
+          id: timeNodeId,
+          label: timePeriod,
+          type: "TimePeriod"
+        };
+        nodes.push(timeNode);
+        // Link the creator to the time node.
+        links.push({
+          source: creatorsMap[creatorKey].id,
+          target: timeNodeId,
+          label: "active in"
+        });
+        // Link each artwork in this group to the time node.
+        creatorTimeMap[creatorKey][timePeriod].forEach(artworkNode => {
+          links.push({
+            source: timeNodeId,
+            target: artworkNode.id,
+            label: "created in"
+          });
+        });
+      });
+    });
+
+    //  link creator nodes directly to the provider node.
     Object.keys(creatorsMap).forEach(key => {
       if (providerNode) {
         links.push({
@@ -138,7 +185,7 @@ fetch(API_URL)
     console.log("Processed nodes:", nodes);
     console.log("Processed links:", links);
 
-    // Create SVG patterns for artwork nodes with images.
+    // Create SVG patterns for artwork nodes.
     const defs = svg.append("defs");
     nodes.forEach(d => {
       if (d.type === "Artwork" && d.image) {
@@ -148,24 +195,23 @@ fetch(API_URL)
           .attr("height", 1)
           .append("image")
           .attr("xlink:href", d.image)
-          .attr("width", 20)         // Adjust size as needed
-          .attr("height", 20)        // Adjust size as needed
+          .attr("width", 20)
+          .attr("height", 20)
           .attr("preserveAspectRatio", "xMidYMid slice");
       }
     });
 
     // Set up force simulation.
     const simulation = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id(d => d.id).distance(d => {
-        // Increase distance between Provider and Creator nodes
-        if (d.source.type === "Provider" || d.target.type === "Provider") {
-          return 250;  
-        }
-        return 75;  //  distance for other links
+      .force("link", d3.forceLink(links).id(d => d.id).distance(link => {
+        // Set different distances based on link labels.
+        if (link.label === "affiliated with") return 250;
+        if (link.label === "active in") return 150;
+        if (link.label === "created in") return 75;
+        return 150;
       }))
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2)); 
-
+      .force("charge", d3.forceManyBody().strength(-50))
+      .force("center", d3.forceCenter(width / 2, height / 2));
 
     // Draw links.
     const link = svg.append("g")
@@ -182,24 +228,28 @@ fetch(API_URL)
       .data(nodes)
       .join("circle")
       .attr("r", d => {
-        if (d.type === "Provider") return 20;  // Increase size for the provider node
+        if (d.type === "Provider") return 20;
         if (d.type === "Creator") return 10;
-        return 12;  // Default for artwork nodes
+        if (d.type === "TimePeriod") return 15;
+        return 12;  // For artwork nodes.
       })
       .attr("fill", d => {
         if (d.type === "Artwork" && d.image) {
           return "url(#pattern-" + d.id + ")";
         } else if (d.type === "Provider") {
-          return "gold";  // Gold for provider
+          return "gold";
         } else if (d.type === "Creator") {
           return "darkgreen";
+        } else if (d.type === "TimePeriod") {
+          return "cornflowerblue";
         }
         return "steelblue";
       })
       .attr("stroke", d => {
-        if (d.type === "Artwork") return "steelblue";  // Outline same as artwork's base color.
+        if (d.type === "Artwork") return "steelblue";
         if (d.type === "Provider") return "gold";
         if (d.type === "Creator") return "darkgreen";
+        if (d.type === "TimePeriod") return "cornflowerblue";
         return "#fff";
       })
       .attr("stroke-width", 2)
@@ -213,15 +263,19 @@ fetch(API_URL)
       d3.select(event.currentTarget)
         .transition()
         .duration(200)
-        .attr("r", function () {
+        .attr("r", function() {
           if (d.type === "Provider") return 20 * 1.5;
           if (d.type === "Creator") return 10 * 1.5;
+          if (d.type === "TimePeriod") return 15 * 1.5;
           return 12 * 1.5;
         });
 
       let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
       if (d.type === "Artwork" && d.image) {
         tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
+      }
+      if (d.type === "TimePeriod") {
+        tooltipContent = `<strong>Time Period:</strong> ${d.label}`;
       }
 
       tooltip.transition()
@@ -234,9 +288,10 @@ fetch(API_URL)
       d3.select(event.currentTarget)
         .transition()
         .duration(200)
-        .attr("r", function () {
+        .attr("r", function() {
           if (d.type === "Provider") return 20;
           if (d.type === "Creator") return 10;
+          if (d.type === "TimePeriod") return 15;
           return 12;
         });
 
@@ -272,4 +327,3 @@ fetch(API_URL)
     }
   })
   .catch(error => console.error("Error fetching data:", error));
-
