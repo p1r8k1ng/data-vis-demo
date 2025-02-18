@@ -1,5 +1,5 @@
 const API_KEY = "renscarklone";
-const ARTIST_QUERY = "Rembrandt van Rijn";  
+const ARTIST_QUERY = "Rembrandt van Rijn";  // The artist 
 const PROVIDER = "Rijksmuseum";              // Using Rijksmuseum as DATA_PROVIDER
 const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=standard&media=true&rows=50&sort=score+desc`;
 
@@ -11,7 +11,9 @@ function getTitle(item) {
   return "Untitled";
 }
 
-// Helper: Get a human-readable creator label.
+// Get creator label with fallback.
+// It first checks the language-aware field, then dcCreator,
+// and if the candidate is "anonymous"/"anoniem" or looks like a URL, it falls back to ARTIST_QUERY.
 function getCreatorLabel(item) {
   if (item.dcCreatorLangAware) {
     const langKeys = Object.keys(item.dcCreatorLangAware);
@@ -92,7 +94,7 @@ fetch(API_URL)
       if (item.edmIsShownBy && item.edmIsShownBy.length > 0) {
         const title = getTitle(item);
         const creatorLabel = getCreatorLabel(item);
-        
+
         const artworkNode = {
           id: item.id,
           label: title,
@@ -102,7 +104,7 @@ fetch(API_URL)
         };
         nodes.push(artworkNode);
 
-        // Normalize the creator label for grouping.
+        // Normalise the creator label for grouping.
         const creatorKey = creatorLabel.trim().toLowerCase();
         if (!creatorsMap[creatorKey]) {
           creatorsMap[creatorKey] = {
@@ -122,7 +124,7 @@ fetch(API_URL)
       }
     });
 
-    // Now, link each creator node to the provider node.
+    // link creator nodes directly to the provider node.
     Object.keys(creatorsMap).forEach(key => {
       if (providerNode) {
         links.push({
@@ -146,17 +148,24 @@ fetch(API_URL)
           .attr("height", 1)
           .append("image")
           .attr("xlink:href", d.image)
-          .attr("width", 20)         // Adjust as needed
-          .attr("height", 20)        // Adjust as needed
+          .attr("width", 20)         // Adjust size as needed
+          .attr("height", 20)        // Adjust size as needed
           .attr("preserveAspectRatio", "xMidYMid slice");
       }
     });
 
     // Set up force simulation.
     const simulation = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id(d => d.id).distance(150))
+      .force("link", d3.forceLink(links).id(d => d.id).distance(d => {
+        // Increase distance between Provider and Creator nodes
+        if (d.source.type === "Provider" || d.target.type === "Provider") {
+          return 250;  
+        }
+        return 75;  //  distance for other links
+      }))
       .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2));
+      .force("center", d3.forceCenter(width / 2, height / 2)); 
+
 
     // Draw links.
     const link = svg.append("g")
@@ -173,22 +182,22 @@ fetch(API_URL)
       .data(nodes)
       .join("circle")
       .attr("r", d => {
-        if (d.type === "Provider") return 12;
+        if (d.type === "Provider") return 20;  // Increase size for the provider node
         if (d.type === "Creator") return 10;
-        return 12;  // For artwork nodes.
+        return 12;  // Default for artwork nodes
       })
       .attr("fill", d => {
         if (d.type === "Artwork" && d.image) {
           return "url(#pattern-" + d.id + ")";
         } else if (d.type === "Provider") {
-          return "gold";
+          return "gold";  // Gold for provider
         } else if (d.type === "Creator") {
           return "darkgreen";
         }
         return "steelblue";
       })
       .attr("stroke", d => {
-        if (d.type === "Artwork") return "steelblue";
+        if (d.type === "Artwork") return "steelblue";  // Outline same as artwork's base color.
         if (d.type === "Provider") return "gold";
         if (d.type === "Creator") return "darkgreen";
         return "#fff";
@@ -204,8 +213,8 @@ fetch(API_URL)
       d3.select(event.currentTarget)
         .transition()
         .duration(200)
-        .attr("r", function() {
-          if (d.type === "Provider") return 12 * 1.5;
+        .attr("r", function () {
+          if (d.type === "Provider") return 20 * 1.5;
           if (d.type === "Creator") return 10 * 1.5;
           return 12 * 1.5;
         });
@@ -225,8 +234,8 @@ fetch(API_URL)
       d3.select(event.currentTarget)
         .transition()
         .duration(200)
-        .attr("r", function() {
-          if (d.type === "Provider") return 12;
+        .attr("r", function () {
+          if (d.type === "Provider") return 20;
           if (d.type === "Creator") return 10;
           return 12;
         });
@@ -263,3 +272,4 @@ fetch(API_URL)
     }
   })
   .catch(error => console.error("Error fetching data:", error));
+
