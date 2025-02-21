@@ -1,7 +1,7 @@
 const API_KEY = "renscarklone";
 const ARTIST_QUERY = "Rembrandt van Rijn";  // The artist we're targeting
 const PROVIDER = "Rijksmuseum";              // Using Rijksmuseum as DATA_PROVIDER
-const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=standard&media=true&rows=50&sort=score+desc`;
+const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
 
 // Helper: Get title with fallback.
 function getTitle(item) {
@@ -11,44 +11,39 @@ function getTitle(item) {
   return "Untitled";
 }
 
-// Helper: Get a human-readable creator label
-
-// FIX THE FACT THAT IT RETURNS UNKNOWN CREATOR!!!!
+// Helper: get artist name!
 function getCreatorLabel(item) {
-  // Check for a valid dcCreatorLangAware field
-  if (item.dcCreatorLangAware) {
-    const langKeys = Object.keys(item.dcCreatorLangAware);
-    if (langKeys.length > 0 && item.dcCreatorLangAware[langKeys[0]].length > 0) {
-      const label = item.dcCreatorLangAware[langKeys[0]][0];
-      if (label.toLowerCase() !== "anonymous" && label.toLowerCase() !== "anoniem") {
-        return label;
-      }
-    }
+  // 1. Try to get `edmAgentLabel` THIS ONE SEEMS TO WORK!!!!
+  if (item.edmAgentLabel && item.edmAgentLabel.length > 0) {
+    return item.edmAgentLabel[0].def;
   }
+  //FALLBACKS POTENTIAL - need to test with different artists 
+  // // 2. Try `edmAgentLabelLangAware` (multi-language support)
+  // if (item.edmAgentLabelLangAware) {
+  //   const langKeys = Object.keys(item.edmAgentLabelLangAware);
+  //   if (langKeys.length > 0 && item.edmAgentLabelLangAware[langKeys[0]].length > 0) {
+  //     return item.edmAgentLabelLangAware[langKeys[0]][0]; // Get the first available language
+  //   }
+  // }
 
-  // Check for a valid dcCreator field
-  if (item.dcCreator && item.dcCreator.length > 0) {
-    const candidate = item.dcCreator[0];
-    if (candidate.toLowerCase() !== "anonymous" && candidate.toLowerCase() !== "anoniem" && !candidate.startsWith("http")) {
-      return candidate;
-    }
-  }
+  // // 3. Try `dcCreator`
+  // if (item.dcCreator && item.dcCreator.length > 0) {
+  //   return item.dcCreator[0];
+  // }
 
-  // If no valid creator is found, dynamically get it from alternative fields
-  if (item.proxy_dc_creatorLangAware) {
-    const keys = Object.keys(item.proxy_dc_creatorLangAware);
-    if (keys.length > 0 && item.proxy_dc_creatorLangAware[keys[0]].length > 0) {
-      return item.proxy_dc_creatorLangAware[keys[0]][0];
-    }
-  }
+  // // 4. Try `dcCreatorLangAware`
+  // if (item.dcCreatorLangAware) {
+  //   const langKeys = Object.keys(item.dcCreatorLangAware);
+  //   if (langKeys.length > 0 && item.dcCreatorLangAware[langKeys[0]].length > 0) {
+  //     return item.dcCreatorLangAware[langKeys[0]][0]; // Get the first available language
+  //   }
+  // }
 
-  if (item.proxy_dc_creator && item.proxy_dc_creator.length > 0) {
-    return item.proxy_dc_creator[0];
-  }
-
-  // If all else fails, return "Unknown Creator"
-  return "Unknown Creator";
+  // 5. Final Fallback: Unknown Artist
+  return "Unknown Artist";
 }
+
+
 
 // Helper: Get time period label from edmTimespanLabel.
 function getTimePeriod(item) {
