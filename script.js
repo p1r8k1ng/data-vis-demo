@@ -11,38 +11,43 @@ function getTitle(item) {
   return "Untitled";
 }
 
-// Helper: Get a human-readable creator label.
+// Helper: Get a human-readable creator label
+
+// FIX THE FACT THAT IT RETURNS UNKNOWN CREATOR!!!!
 function getCreatorLabel(item) {
+  // Check for a valid dcCreatorLangAware field
   if (item.dcCreatorLangAware) {
     const langKeys = Object.keys(item.dcCreatorLangAware);
     if (langKeys.length > 0 && item.dcCreatorLangAware[langKeys[0]].length > 0) {
       const label = item.dcCreatorLangAware[langKeys[0]][0];
-      if (label.toLowerCase() === "anonymous" || label.toLowerCase() === "anoniem") {
-         return ARTIST_QUERY;
+      if (label.toLowerCase() !== "anonymous" && label.toLowerCase() !== "anoniem") {
+        return label;
       }
-      return label;
     }
   }
+
+  // Check for a valid dcCreator field
   if (item.dcCreator && item.dcCreator.length > 0) {
     const candidate = item.dcCreator[0];
-    if (candidate.toLowerCase() === "anonymous" || candidate.toLowerCase() === "anoniem") {
-      return ARTIST_QUERY;
+    if (candidate.toLowerCase() !== "anonymous" && candidate.toLowerCase() !== "anoniem" && !candidate.startsWith("http")) {
+      return candidate;
     }
-    if (candidate.startsWith("http")) {
-      if (item.proxy_dc_creatorLangAware) {
-        const keys = Object.keys(item.proxy_dc_creatorLangAware);
-        if (keys.length > 0 && item.proxy_dc_creatorLangAware[keys[0]].length > 0) {
-          return item.proxy_dc_creatorLangAware[keys[0]][0];
-        }
-      }
-      if (item.proxy_dc_creator && item.proxy_dc_creator.length > 0) {
-        return item.proxy_dc_creator[0];
-      }
-      return ARTIST_QUERY;
-    }
-    return candidate;
   }
-  return ARTIST_QUERY;
+
+  // If no valid creator is found, dynamically get it from alternative fields
+  if (item.proxy_dc_creatorLangAware) {
+    const keys = Object.keys(item.proxy_dc_creatorLangAware);
+    if (keys.length > 0 && item.proxy_dc_creatorLangAware[keys[0]].length > 0) {
+      return item.proxy_dc_creatorLangAware[keys[0]][0];
+    }
+  }
+
+  if (item.proxy_dc_creator && item.proxy_dc_creator.length > 0) {
+    return item.proxy_dc_creator[0];
+  }
+
+  // If all else fails, return "Unknown Creator"
+  return "Unknown Creator";
 }
 
 // Helper: Get time period label from edmTimespanLabel.
