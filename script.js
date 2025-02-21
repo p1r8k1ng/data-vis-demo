@@ -58,17 +58,13 @@ fetch(API_URL)
   .then(response => response.json())
   .then(data => {
     console.log("API Response:", data);
-
     const width = 900;
     const height = 700;
-
-    // Create the SVG container.
     const svg = d3.select("#graph")
       .append("svg")
       .attr("width", width)
       .attr("height", height);
 
-    // Create a tooltip.
     const tooltip = d3.select("body").append("div")
       .attr("class", "tooltip")
       .style("opacity", 0)
@@ -83,7 +79,6 @@ fetch(API_URL)
     const nodes = [];
     const links = [];
     const creatorsMap = {};
-
     let providerNode = null;
 
     // Create the provider (museum) node.
@@ -96,16 +91,19 @@ fetch(API_URL)
       nodes.push(providerNode);
     }
 
-    // building a grouping for artworks by creator and time period.
+    //  populating the time period dropdown
+    const timePeriodsSet = new Set();
+
+    // Group artworks by creator and time period.
     // Structure: { creatorKey: { timePeriod: [artworkNodes] } }
     const creatorTimeMap = {};
 
-    // Process each record to create artwork nodes and link them to time period.
     items.forEach(item => {
       if (item.edmIsShownBy && item.edmIsShownBy.length > 0) {
         const title = getTitle(item);
         const creatorLabel = getCreatorLabel(item);
         const timePeriod = getTimePeriod(item);
+        timePeriodsSet.add(timePeriod);
 
         const artworkNode = {
           id: item.id,
@@ -128,7 +126,6 @@ fetch(API_URL)
           nodes.push(creatorsMap[creatorKey]);
         }
         
-
         // Build creatorTimeMap.
         if (!creatorTimeMap[creatorKey]) {
           creatorTimeMap[creatorKey] = {};
@@ -140,13 +137,10 @@ fetch(API_URL)
       }
     });
 
-    // create a TimePeriod node.
-    //  link the Creator node to the TimePeriod node,
-    //  link  TimePeriod node to each artwork.
+    // Create TimePeriod nodes and link them to their creators and artworks.
     Object.keys(creatorTimeMap).forEach(creatorKey => {
       const timeObj = creatorTimeMap[creatorKey];
       Object.keys(timeObj).forEach(timePeriod => {
-        // Create a unique time node per creator & time period.
         const timeNodeId = `time-${creatorKey}-${timePeriod.replace(/\s+/g, "")}`;
         const timeNode = {
           id: timeNodeId,
@@ -154,13 +148,11 @@ fetch(API_URL)
           type: "TimePeriod"
         };
         nodes.push(timeNode);
-        // Link the creator to the time node.
         links.push({
           source: creatorsMap[creatorKey].id,
           target: timeNodeId,
           label: "active in"
         });
-        // Link each artwork in this group to the time node.
         creatorTimeMap[creatorKey][timePeriod].forEach(artworkNode => {
           links.push({
             source: timeNodeId,
@@ -171,7 +163,7 @@ fetch(API_URL)
       });
     });
 
-    //  link creator nodes directly to the provider node.
+    // Link creator nodes directly to the provider node.
     Object.keys(creatorsMap).forEach(key => {
       if (providerNode) {
         links.push({
@@ -184,6 +176,15 @@ fetch(API_URL)
 
     console.log("Processed nodes:", nodes);
     console.log("Processed links:", links);
+
+    // Populate the Time Period dropdown.
+    const institutionSelect = document.getElementById("institution");
+    timePeriodsSet.forEach(period => {
+      const option = document.createElement("option");
+      option.value = period;
+      option.textContent = period;
+      institutionSelect.appendChild(option);
+    });
 
     // Create SVG patterns for artwork nodes.
     const defs = svg.append("defs");
@@ -201,37 +202,38 @@ fetch(API_URL)
       }
     });
 
-    // Set up force simulation.
-    const simulation = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id(d => d.id).distance(link => {
-        // Set different distances based on link labels.
-        if (link.label === "affiliated with") return 250;
-        if (link.label === "active in") return 150;
-        if (link.label === "created in") return 75;
-        return 150;
-      }))
+    // Set up the full force simulation.
+    let simulation = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links)
+        .id(d => d.id)
+        .distance(link => {
+          if (link.label === "affiliated with") return 250;
+          if (link.label === "active in") return 150;
+          if (link.label === "created in") return 75;
+          return 150;
+        }))
       .force("charge", d3.forceManyBody().strength(-50))
       .force("center", d3.forceCenter(width / 2, height / 2));
 
-    // Draw links.
-    const link = svg.append("g")
-      .selectAll("line")
+    // Draw links and nodes (initially, full graph).
+    const linkGroup = svg.append("g").attr("class", "links");
+    const nodeGroup = svg.append("g").attr("class", "nodes");
+
+    let linkSel = linkGroup.selectAll("line")
       .data(links)
       .join("line")
       .attr("stroke", "#aaa")
       .attr("stroke-opacity", 0.8)
       .attr("stroke-width", 2);
 
-    // Draw nodes.
-    const node = svg.append("g")
-      .selectAll("circle")
+    let nodeSel = nodeGroup.selectAll("circle")
       .data(nodes)
       .join("circle")
       .attr("r", d => {
         if (d.type === "Provider") return 20;
         if (d.type === "Creator") return 10;
         if (d.type === "TimePeriod") return 15;
-        return 12;  // For artwork nodes.
+        return 12;
       })
       .attr("fill", d => {
         if (d.type === "Artwork" && d.image) {
@@ -258,8 +260,8 @@ fetch(API_URL)
         .on("drag", dragged)
         .on("end", dragEnded));
 
-    // Hover tooltips and node enlargement.
-    node.on("mouseover", (event, d) => {
+    // Tooltip events.
+    nodeSel.on("mouseover", (event, d) => {
       d3.select(event.currentTarget)
         .transition()
         .duration(200)
@@ -278,9 +280,7 @@ fetch(API_URL)
         tooltipContent = `<strong>Time Period:</strong> ${d.label}`;
       }
 
-      tooltip.transition()
-        .duration(200)
-        .style("opacity", 1);
+      tooltip.transition().duration(200).style("opacity", 1);
       tooltip.html(tooltipContent)
         .style("left", (event.pageX + 10) + "px")
         .style("top", (event.pageY + 10) + "px");
@@ -294,19 +294,16 @@ fetch(API_URL)
           if (d.type === "TimePeriod") return 15;
           return 12;
         });
-
-      tooltip.transition()
-        .duration(200)
-        .style("opacity", 0);
+      tooltip.transition().duration(200).style("opacity", 0);
     });
 
     simulation.on("tick", () => {
-      link
+      linkSel
         .attr("x1", d => d.source.x)
         .attr("y1", d => d.source.y)
         .attr("x2", d => d.target.x)
         .attr("y2", d => d.target.y);
-      node
+      nodeSel
         .attr("cx", d => d.x)
         .attr("cy", d => d.y);
     });
@@ -325,5 +322,209 @@ fetch(API_URL)
       d.fx = null;
       d.fy = null;
     }
+
+    // -------------------------------
+    // Filtering: Reset and redraw graph based on selected time period.
+    // -------------------------------
+    document.getElementById("applyFilters").addEventListener("click", () => {
+      const selectedTime = institutionSelect.value;
+      // If "All" is selected, restore full graph.
+      if (selectedTime === "all") {
+        location.reload();
+        return;
+      }
+
+      // Build filtered lists:
+      const filteredNodes = [];
+      const filteredLinks = [];
+      const filteredNodeIds = new Set();
+
+      // Always include the provider node.
+      if (providerNode) {
+        filteredNodes.push(providerNode);
+        filteredNodeIds.add(providerNode.id);
+      }
+
+      // Find the time period node that matches the selected time.
+      const selectedTimeNode = nodes.find(n => n.type === "TimePeriod" && n.label === selectedTime);
+      if (selectedTimeNode) {
+        filteredNodes.push(selectedTimeNode);
+        filteredNodeIds.add(selectedTimeNode.id);
+
+        // Include artwork nodes that have this time period.
+        nodes.filter(n => n.type === "Artwork" && n.timePeriod === selectedTime)
+          .forEach(artNode => {
+            filteredNodes.push(artNode);
+            filteredNodeIds.add(artNode.id);
+          });
+
+        //  include creator nodes that are linked to this time node.
+        links.filter(l => {
+          //  l.source or l.target = objects or ids.
+          const sourceId = typeof l.source === "object" ? l.source.id : l.source;
+          const targetId = typeof l.target === "object" ? l.target.id : l.target;
+          return (targetId === selectedTimeNode.id && l.label === "active in");
+        }).forEach(l => {
+          const creatorNode = nodes.find(n => n.id === (typeof l.source === "object" ? l.source.id : l.source));
+          if (creatorNode) {
+            filteredNodes.push(creatorNode);
+            filteredNodeIds.add(creatorNode.id);
+          }
+        });
+      }
+
+      // Filter links connecting only filtered nodes.
+      links.forEach(l => {
+        const sourceId = typeof l.source === "object" ? l.source.id : l.source;
+        const targetId = typeof l.target === "object" ? l.target.id : l.target;
+        if (filteredNodeIds.has(sourceId) && filteredNodeIds.has(targetId)) {
+          filteredLinks.push(l);
+        }
+      });
+
+      // Clear  current svg content.
+      svg.selectAll("*").remove();
+
+      // Recreate patterns for artwork nodes.
+      const newDefs = svg.append("defs");
+      filteredNodes.forEach(d => {
+        if (d.type === "Artwork" && d.image) {
+          newDefs.append("pattern")
+            .attr("id", "pattern-" + d.id)
+            .attr("width", 1)
+            .attr("height", 1)
+            .append("image")
+            .attr("xlink:href", d.image)
+            .attr("width", 20)
+            .attr("height", 20)
+            .attr("preserveAspectRatio", "xMidYMid slice");
+        }
+      });
+
+      // Create separate groups so links are drawn behind nodes.
+      const newLinkGroup = svg.append("g").attr("class", "links");
+      const newNodeGroup = svg.append("g").attr("class", "nodes");
+
+      // Recreate the force simulation with filtered data.
+      simulation = d3.forceSimulation(filteredNodes)
+        .force("link", d3.forceLink(filteredLinks)
+          .id(d => d.id)
+          .distance(link => {
+            if (link.label === "affiliated with") return 250;
+            if (link.label === "active in") return 150;
+            if (link.label === "created in") return 75;
+            return 150;
+          }))
+        .force("charge", d3.forceManyBody().strength(-50))
+        .force("center", d3.forceCenter(width / 2, height / 2));
+
+      // Redraw links.
+      const newLinkSel = newLinkGroup.selectAll("line")
+        .data(filteredLinks)
+        .join("line")
+        .attr("stroke", "#aaa")
+        .attr("stroke-opacity", 0.8)
+        .attr("stroke-width", 2);
+
+      // Redraw nodes.
+      const newNodeSel = newNodeGroup.selectAll("circle")
+        .data(filteredNodes)
+        .join("circle")
+        .attr("r", d => {
+          if (d.type === "Provider") return 20;
+          if (d.type === "Creator") return 10;
+          if (d.type === "TimePeriod") return 15;
+          return 12;
+        })
+        .attr("fill", d => {
+          if (d.type === "Artwork" && d.image) {
+            return "url(#pattern-" + d.id + ")";
+          } else if (d.type === "Provider") {
+            return "gold";
+          } else if (d.type === "Creator") {
+            return "darkgreen";
+          } else if (d.type === "TimePeriod") {
+            return "cornflowerblue";
+          }
+          return "steelblue";
+        })
+        .attr("stroke", d => {
+          if (d.type === "Artwork") return "steelblue";
+          if (d.type === "Provider") return "gold";
+          if (d.type === "Creator") return "darkgreen";
+          if (d.type === "TimePeriod") return "cornflowerblue";
+          return "#fff";
+        })
+        .attr("stroke-width", 2)
+        .call(d3.drag()
+          .on("start", dragStarted)
+          .on("drag", dragged)
+          .on("end", dragEnded));
+
+      // Tooltip events for filtered nodes.
+      newNodeSel.on("mouseover", (event, d) => {
+        d3.select(event.currentTarget)
+          .transition()
+          .duration(200)
+          .attr("r", function() {
+            if (d.type === "Provider") return 20 * 1.5;
+            if (d.type === "Creator") return 10 * 1.5;
+            if (d.type === "TimePeriod") return 15 * 1.5;
+            return 12 * 1.5;
+          });
+
+        let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
+        if (d.type === "Artwork" && d.image) {
+          tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
+        }
+        if (d.type === "TimePeriod") {
+          tooltipContent = `<strong>Time Period:</strong> ${d.label}`;
+        }
+
+        tooltip.transition().duration(200).style("opacity", 1);
+        tooltip.html(tooltipContent)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY + 10) + "px");
+      }).on("mouseout", (event, d) => {
+        d3.select(event.currentTarget)
+          .transition()
+          .duration(200)
+          .attr("r", function() {
+            if (d.type === "Provider") return 20;
+            if (d.type === "Creator") return 10;
+            if (d.type === "TimePeriod") return 15;
+            return 12;
+          });
+        tooltip.transition().duration(200).style("opacity", 0);
+      });
+
+      simulation.on("tick", () => {
+        newLinkSel
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+        newNodeSel
+          .attr("cx", d => d.x)
+          .attr("cy", d => d.y);
+      });
+
+      simulation.alpha(1).restart();
+
+      function dragStarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+      function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+      }
+      function dragEnded(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      }
+    });
   })
   .catch(error => console.error("Error fetching data:", error));
