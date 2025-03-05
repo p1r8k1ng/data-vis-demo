@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
 
   // --- Helpers ---
-  function getTitle(item) {
+  function getTitle(item) { //extracting title of artwork
     if (item.title?.length > 0) return item.title[0];
     if (item.dcTitleLangAware?.def?.length > 0) {
       return item.dcTitleLangAware.def[0];
@@ -13,7 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return "Untitled";
   }
 
-  function getCreatorLabels(item) {
+  function getCreatorLabels(item) { //get name of creators of artwork
     if (item.edmAgentLabel?.length > 0) {
       const labels = item.edmAgentLabel
         .map(agent => agent.def)
@@ -23,21 +23,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (item.dcCreator?.length > 0) {
       return item.dcCreator;
     }
-    return ["Unknown Artist"];
+    return ["Unknown Artist"]; //fallback
   }
 
-  function getTimePeriod(item) {
+  function getTimePeriod(item) { //get time period
     if (item.edmTimespanLabel?.length > 0) {
       return item.edmTimespanLabel[0].def || "Unknown Period";
     }
     return "Unknown Period";
   }
 
-  // Fetch Data 
+  // Fetch Data from api
   fetch(API_URL)
-    .then(response => response.json())
+    .then(response => response.json()) //convert response to json
     .then(data => {
-      const width = 900;
+      const width = 900; //setting up dimensions 
       const height = 700;
 
       // Create main SVG and zoomable container.
@@ -46,19 +46,19 @@ document.addEventListener("DOMContentLoaded", () => {
         .attr("width", width)
         .attr("height", height);
 
-      const container = svg.append("g");
+      const container = svg.append("g"); // group element that holds everything is svg
 
       svg.call(d3.zoom()
-        .scaleExtent([0.1, 10])
+        .scaleExtent([0.1, 10]) //setting limits of the zooming
         .on("zoom", event => {
-          container.attr("transform", event.transform);
+          container.attr("transform", event.transform); //applying zoom transforms
         })
       );
 
 
 
 
-      // Tooltip
+      // Tooltip display info when hovering
       const tooltip = d3.select("body").append("div")
         .attr("class", "tooltip")
         .style("opacity", 0)
@@ -67,14 +67,16 @@ document.addEventListener("DOMContentLoaded", () => {
         .style("border", "1px solid #ccc")
         .style("padding", "5px")
         .style("font-size", "12px")
-        .style("pointer-events", "none");
+        .style("pointer-events", "none"); // prevent tooltip interfering with interactions
 
+
+      //extracting artwork items from api
       const items = data.items || [];
       const nodes = [];
-      const links = [];
-      const creatorsMap = {}; // normalised creator -> Creator node
+      const links = []; // list of links
+      const creatorsMap = {}; // map to store creators and prevent duplicates
 
-      // A map from timePeriod string -> array of Artwork node references
+      // map to store artworks cateogorised by time period
       const timePeriodMap = new Map();
 
       // Provider node
@@ -93,7 +95,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (item.edmIsShownBy?.length > 0) {
           const title = getTitle(item);
           const timePeriod = getTimePeriod(item);
-
+          //creating artwork node
           const artworkNode = {
             id: item.id,
             label: title,
@@ -103,13 +105,13 @@ document.addEventListener("DOMContentLoaded", () => {
           };
           nodes.push(artworkNode);
 
-          // Track in timePeriodMap for bounding boxes
+          //grouping bounding box by time period
           if (!timePeriodMap.has(timePeriod)) {
             timePeriodMap.set(timePeriod, []);
           }
           timePeriodMap.get(timePeriod).push(artworkNode);
 
-          // Link to creators
+          // handling crfeators and linking them to artworks
           const creatorLabels = getCreatorLabels(item);
           creatorLabels.forEach(creatorLabel => {
             const creatorKey = creatorLabel.trim().toLowerCase();
@@ -137,8 +139,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Only add if not already present
                 if (!links.some(l =>
                   ((l.source === creatorsMap[key1].id && l.target === creatorsMap[key2].id) ||
-                   (l.source === creatorsMap[key2].id && l.target === creatorsMap[key1].id)) &&
-                   l.label === "collaborated with"
+                    (l.source === creatorsMap[key2].id && l.target === creatorsMap[key1].id)) &&
+                  l.label === "collaborated with"
                 )) {
                   links.push({
                     source: creatorsMap[key1].id,
@@ -164,7 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
-      // Log
+      // Log for debugging
       console.log("Nodes:", nodes);
       console.log("Links:", links);
 
@@ -227,9 +229,9 @@ document.addEventListener("DOMContentLoaded", () => {
         .force("link", d3.forceLink(links)
           .id(d => d.id)
           .distance(link => {
-            if (link.label === "affiliated with") return 250; 
-            if (link.label === "created")         return 100; 
-            if (link.collaborative)               return 80;  
+            if (link.label === "affiliated with") return 250;
+            if (link.label === "created") return 100;
+            if (link.collaborative) return 80;
             return 150;
           })
         )
@@ -237,15 +239,15 @@ document.addEventListener("DOMContentLoaded", () => {
         .force("forceX", d3.forceX(d => {
           switch (d.type) {
             case "Provider": return 100;
-            case "Creator":  return 300;
-            case "Artwork":  return 550;
-            default:         return 550;
+            case "Creator": return 300;
+            case "Artwork": return 550;
+            default: return 550;
           }
         }).strength(0.2))
         .force("forceY", d3.forceY(height / 2).strength(0.1))
         .force("collide", d3.forceCollide().radius(d => {
           if (d.type === "Provider") return 30;
-          if (d.type === "Creator")  return 20;
+          if (d.type === "Creator") return 20;
           return 15; // Artwork
         }).iterations(2));
 
@@ -265,7 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .join("circle")
         .attr("r", d => {
           if (d.type === "Provider") return 20;
-          if (d.type === "Creator")  return 10;
+          if (d.type === "Creator") return 10;
           return 12;
         })
         .attr("fill", d => {
@@ -279,9 +281,9 @@ document.addEventListener("DOMContentLoaded", () => {
           return "steelblue";
         })
         .attr("stroke", d => {
-          if (d.type === "Artwork")  return "steelblue";
+          if (d.type === "Artwork") return "steelblue";
           if (d.type === "Provider") return "gold";
-          if (d.type === "Creator")  return "darkgreen";
+          if (d.type === "Creator") return "darkgreen";
           return "#fff";
         })
         .attr("stroke-width", 2)
@@ -298,7 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
           .duration(200)
           .attr("r", () => {
             if (d.type === "Provider") return 20 * 1.5;
-            if (d.type === "Creator")  return 10 * 1.5;
+            if (d.type === "Creator") return 10 * 1.5;
             return 12 * 1.5;
           });
         let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
@@ -315,7 +317,7 @@ document.addEventListener("DOMContentLoaded", () => {
           .duration(200)
           .attr("r", () => {
             if (d.type === "Provider") return 20;
-            if (d.type === "Creator")  return 10;
+            if (d.type === "Creator") return 10;
             return 12;
           });
         tooltip.transition().duration(200).style("opacity", 0);
@@ -477,9 +479,9 @@ document.addEventListener("DOMContentLoaded", () => {
           .force("link", d3.forceLink(filteredLinks)
             .id(d => d.id)
             .distance(link => {
-              if (link.label === "affiliated with") return 250; 
-              if (link.label === "created")         return 100; 
-              if (link.collaborative)               return 80;  
+              if (link.label === "affiliated with") return 250;
+              if (link.label === "created") return 100;
+              if (link.collaborative) return 80;
               return 150;
             })
           )
@@ -487,15 +489,15 @@ document.addEventListener("DOMContentLoaded", () => {
           .force("forceX", d3.forceX(d => {
             switch (d.type) {
               case "Provider": return 100;
-              case "Creator":  return 300;
-              case "Artwork":  return 550;
-              default:         return 550;
+              case "Creator": return 300;
+              case "Artwork": return 550;
+              default: return 550;
             }
           }).strength(0.2))
           .force("forceY", d3.forceY(height / 2).strength(0.1))
           .force("collide", d3.forceCollide().radius(d => {
             if (d.type === "Provider") return 30;
-            if (d.type === "Creator")  return 20;
+            if (d.type === "Creator") return 20;
             return 15;
           }).iterations(2));
 
@@ -511,7 +513,7 @@ document.addEventListener("DOMContentLoaded", () => {
           .join("circle")
           .attr("r", d => {
             if (d.type === "Provider") return 20;
-            if (d.type === "Creator")  return 10;
+            if (d.type === "Creator") return 10;
             return 12;
           })
           .attr("fill", d => {
@@ -525,9 +527,9 @@ document.addEventListener("DOMContentLoaded", () => {
             return "steelblue";
           })
           .attr("stroke", d => {
-            if (d.type === "Artwork")  return "steelblue";
+            if (d.type === "Artwork") return "steelblue";
             if (d.type === "Provider") return "gold";
-            if (d.type === "Creator")  return "darkgreen";
+            if (d.type === "Creator") return "darkgreen";
             return "#fff";
           })
           .attr("stroke-width", 2)
@@ -543,7 +545,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .duration(200)
             .attr("r", () => {
               if (d.type === "Provider") return 20 * 1.5;
-              if (d.type === "Creator")  return 10 * 1.5;
+              if (d.type === "Creator") return 10 * 1.5;
               return 12 * 1.5;
             });
           let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
@@ -560,7 +562,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .duration(200)
             .attr("r", () => {
               if (d.type === "Provider") return 20;
-              if (d.type === "Creator")  return 10;
+              if (d.type === "Creator") return 10;
               return 12;
             });
           tooltip.transition().duration(200).style("opacity", 0);
@@ -625,9 +627,11 @@ document.addEventListener("DOMContentLoaded", () => {
         d.fx = null;
         d.fy = null;
       }
-      
 
 
+      //
+      // TIMELINE START
+      //
 
       //  container for the timeline
       const timelineWidth = 900;
@@ -656,48 +660,50 @@ document.addEventListener("DOMContentLoaded", () => {
         timelineData.push({ label: period, year: parseYear(period) });
       }
 
-        // Sort timeline data by numeric year
-        timelineData.sort((a, b) => a.year - b.year);
+      // Sort timeline data by numeric year
+      timelineData.sort((a, b) => a.year - b.year);
 
-        // Build scales
-        const xExtent = d3.extent(timelineData, d => d.year);
-        // If everything is 0 or unknown set a dummy scale
-        const xScale = d3.scaleLinear()
-          .domain([xExtent[0] || 0, xExtent[1] || 100]) // fallback
-          .range([timelineMargin.left, timelineWidth - timelineMargin.right]);
+      // Build scales
+      const xExtent = d3.extent(timelineData, d => d.year);
+      // If everything is 0 or unknown set a dummy scale
+      const xScale = d3.scaleLinear()
+        .domain([xExtent[0] || 0, xExtent[1] || 100]) // fallback
+        .range([timelineMargin.left, timelineWidth - timelineMargin.right]);
 
-        // Create axis
-        const xAxis = d3.axisBottom(xScale)
-          .tickFormat(d => (d === 0 ? "Unknown" : d));
+      // Create axis
+      const xAxis = d3.axisBottom(xScale)
+        .tickFormat(d => (d === 0 ? "Unknown" : d));
 
-        timelineSvg.append("g")
-         .attr("transform", `translate(0,${timelineHeight - timelineMargin.bottom})`)
+      timelineSvg.append("g")
+        .attr("transform", `translate(0,${timelineHeight - timelineMargin.bottom})`)
 
-          .call(xAxis);
+        .call(xAxis);
 
-        // Plot points for each time period
-        timelineSvg.selectAll(".timelineCircle")
-          .data(timelineData)
-          .join("circle")
-          .attr("class", "timelineCircle")
-          .attr("cx", d => xScale(d.year))
-          .attr("cy", timelineHeight / 2)
-          .attr("r", 6)
-          .attr("fill", "#007acc");
+      // Plot points for each time period
+      timelineSvg.selectAll(".timelineCircle")
+        .data(timelineData)
+        .join("circle")
+        .attr("class", "timelineCircle")
+        .attr("cx", d => xScale(d.year))
+        .attr("cy", timelineHeight / 2)
+        .attr("r", 6)
+        .attr("fill", "#007acc");
 
-        // Add labels
-        timelineSvg.selectAll(".timelineLabel")
-          .data(timelineData)
-          .join("text")
-          .attr("class", "timelineLabel")
-          .attr("x", d => xScale(d.year))
-          .attr("y", (timelineHeight / 2) - 12)
-          .attr("text-anchor", "middle")
-          .attr("fill", "#333")
-          .attr("font-size", 12)
-          .text(d => d.label);
+      // Add labels
+      timelineSvg.selectAll(".timelineLabel")
+        .data(timelineData)
+        .join("text")
+        .attr("class", "timelineLabel")
+        .attr("x", d => xScale(d.year))
+        .attr("y", (timelineHeight / 2) - 12)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#333")
+        .attr("font-size", 12)
+        .text(d => d.label);
 
-
+      //
+      // TIMELINE END
+      //
 
 
 
