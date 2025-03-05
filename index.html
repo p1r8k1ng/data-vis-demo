@@ -1,40 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Visualisation Prototype</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Network Visualisation Prototype</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Artefact Network <span class="fancy">Visualisation</span></h1>
-    <div class="container">
-        <aside class="sidebar">
-            <h2>Filter Options</h2>
-        
-                   
-            <div>
-                <label for="artist">Filter by Artist:</label>
-                <select id="artist">
-                    <option value="all">All</option>
-                </select>
-            </div>
-        
-            <div>
-                <label for="institution">Filter by Time Period:</label>
-                <select id="institution">
-                    <option value="all">All</option>
-                </select>
-            </div>
-        
-
-            <div>
-                <button id="applyFilters">Apply Filters</button>
-            </div>
-        </aside>
-        <div id="graph"></div>
-    </div>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="script.js"></script>
+  <h1>Artefact Network <span class="fancy">Visualisation</span></h1>
+  <div class="container">
+    <aside class="sidebar">
+      <h2>Filter Options</h2>
+      <div>
+        <label for="artist">Filter by Artist:</label>
+        <!-- Using a text input for dynamic artist searching -->
+        <input type="text" id="artist" placeholder="Enter artist name...">
+      </div>
+      <div>
+        <label for="institution">Filter by Time Period:</label>
+        <select id="institution">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div>
+        <button id="applyFilters">Apply Filters</button>
+      </div>
+    </aside>
+    <div id="graph"></div>
+  </div>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
