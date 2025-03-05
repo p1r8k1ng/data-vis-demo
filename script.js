@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return "Unknown Period";
   }
 
-  // --- Fetch Data ---
+  // Fetch Data 
   fetch(API_URL)
     .then(response => response.json())
     .then(data => {
@@ -54,6 +54,9 @@ document.addEventListener("DOMContentLoaded", () => {
           container.attr("transform", event.transform);
         })
       );
+
+
+
 
       // Tooltip
       const tooltip = d3.select("body").append("div")
@@ -318,7 +321,7 @@ document.addEventListener("DOMContentLoaded", () => {
         tooltip.transition().duration(200).style("opacity", 0);
       });
 
-      // On each tick, update node positions & bounding boxes
+      // On each tick, update node positions and bounding boxes
       simulation.on("tick", () => {
         linkSel
           .attr("x1", d => d.source.x)
@@ -622,6 +625,82 @@ document.addEventListener("DOMContentLoaded", () => {
         d.fx = null;
         d.fy = null;
       }
+      
+
+
+
+      //  container for the timeline
+      const timelineWidth = 900;
+      const timelineHeight = 150;
+      const timelineMargin = { top: 20, right: 20, bottom: 20, left: 40 };
+
+      const timelineSvg = d3.select("#timeline")
+        .append("svg")
+        .attr("width", timelineWidth)
+        .attr("height", timelineHeight);
+
+      // Parse numeric years if possible
+      // attempt to extract a numeric year from the timePeriod label using a simple regex.
+      // If no numeric year is found -  treat it as 0 so they appear on the far left.
+      function parseYear(label) {
+        // Attempt to match a 4-digit e.g. "1650" or "1641" or "1632/1634"
+        const match = label.match(/\d{3,4}/);
+        if (match) {
+          return +match[0];
+        }
+        return 0; // fallback
+      }
+
+      const timelineData = [];
+      for (const [period] of timePeriodMap) {
+        timelineData.push({ label: period, year: parseYear(period) });
+      }
+
+        // Sort timeline data by numeric year
+        timelineData.sort((a, b) => a.year - b.year);
+
+        // Build scales
+        const xExtent = d3.extent(timelineData, d => d.year);
+        // If everything is 0 or unknown set a dummy scale
+        const xScale = d3.scaleLinear()
+          .domain([xExtent[0] || 0, xExtent[1] || 100]) // fallback
+          .range([timelineMargin.left, timelineWidth - timelineMargin.right]);
+
+        // Create axis
+        const xAxis = d3.axisBottom(xScale)
+          .tickFormat(d => (d === 0 ? "Unknown" : d));
+
+        timelineSvg.append("g")
+         .attr("transform", `translate(0,${timelineHeight - timelineMargin.bottom})`)
+
+          .call(xAxis);
+
+        // Plot points for each time period
+        timelineSvg.selectAll(".timelineCircle")
+          .data(timelineData)
+          .join("circle")
+          .attr("class", "timelineCircle")
+          .attr("cx", d => xScale(d.year))
+          .attr("cy", timelineHeight / 2)
+          .attr("r", 6)
+          .attr("fill", "#007acc");
+
+        // Add labels
+        timelineSvg.selectAll(".timelineLabel")
+          .data(timelineData)
+          .join("text")
+          .attr("class", "timelineLabel")
+          .attr("x", d => xScale(d.year))
+          .attr("y", (timelineHeight / 2) - 12)
+          .attr("text-anchor", "middle")
+          .attr("fill", "#333")
+          .attr("font-size", 12)
+          .text(d => d.label);
+
+
+
+
+
     })
     .catch(error => console.error("Error fetching data:", error));
 });
