@@ -1,63 +1,61 @@
 document.addEventListener("DOMContentLoaded", () => {
   const API_KEY = "renscarklone";
-  const ARTIST_QUERY = "Johannes Vermeer";  // The artist we're targeting
+  const ARTIST_QUERY = "Johannes Vermeer";  // The artist to query
   const PROVIDER = "Rijksmuseum";           // Using Rijksmuseum as DATA_PROVIDER
   const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
 
-  // Helper: Get title with fallback.
+  // --- Helpers ---
   function getTitle(item) {
-    if (item.title && item.title.length > 0) return item.title[0];
-    if (item.dcTitleLangAware && item.dcTitleLangAware.def && item.dcTitleLangAware.def.length > 0) {
+    if (item.title?.length > 0) return item.title[0];
+    if (item.dcTitleLangAware?.def?.length > 0) {
       return item.dcTitleLangAware.def[0];
     }
     return "Untitled";
   }
 
-  // Helper: Get an array of artist names dynamically. 
   function getCreatorLabels(item) {
-    if (item.edmAgentLabel && item.edmAgentLabel.length > 0) {
-      const labels = item.edmAgentLabel.map(agent => agent.def).filter(name => name && name.trim() !== "");
+    if (item.edmAgentLabel?.length > 0) {
+      const labels = item.edmAgentLabel
+        .map(agent => agent.def)
+        .filter(name => name && name.trim() !== "");
       if (labels.length > 0) return labels;
     }
-      //  fall back to dcCreator.
-    if (item.dcCreator && item.dcCreator.length > 0) {
+    if (item.dcCreator?.length > 0) {
       return item.dcCreator;
     }
     return ["Unknown Artist"];
   }
 
-  // Helper: Get time period label from edmTimespanLabel.
   function getTimePeriod(item) {
-    if (item.edmTimespanLabel && item.edmTimespanLabel.length > 0) {
+    if (item.edmTimespanLabel?.length > 0) {
       return item.edmTimespanLabel[0].def || "Unknown Period";
     }
     return "Unknown Period";
   }
 
+  // --- Fetch Data ---
   fetch(API_URL)
     .then(response => response.json())
     .then(data => {
-      console.log("API Response:", data);
       const width = 900;
       const height = 700;
 
-      // Create the SVG container.
+      // Create main SVG and zoomable container.
       const svg = d3.select("#graph")
         .append("svg")
         .attr("width", width)
         .attr("height", height);
 
-      // Append a zoomable container group.
       const container = svg.append("g");
 
-      // Apply zoom behavior.
       svg.call(d3.zoom()
         .scaleExtent([0.1, 10])
         .on("zoom", event => {
           container.attr("transform", event.transform);
-        }));
+        })
+      );
 
-      // Create tooltip.
+      // Tooltip
       const tooltip = d3.select("body").append("div")
         .attr("class", "tooltip")
         .style("opacity", 0)
@@ -71,12 +69,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const items = data.items || [];
       const nodes = [];
       const links = [];
-      const creatorsMap = {};  // normalised creator → Creator node
-      const globalTimePeriods = new Map(); // key: time period string, value: time period node
+      const creatorsMap = {}; // normalised creator -> Creator node
 
-      // Create Provider (museum) node.
+      // A map from timePeriod string -> array of Artwork node references
+      const timePeriodMap = new Map();
+
+      // Provider node
       let providerNode = null;
-      if (items.length > 0 && items[0].dataProvider && items[0].dataProvider.length > 0) {
+      if (items.length > 0 && items[0].dataProvider?.length > 0) {
         providerNode = {
           id: `provider-${items[0].dataProvider[0]}`,
           label: items[0].dataProvider[0],
@@ -85,26 +85,29 @@ document.addEventListener("DOMContentLoaded", () => {
         nodes.push(providerNode);
       }
 
-      // Process each artwork.
+      // --- Build Artwork and Creator nodes ---
       items.forEach(item => {
-        if (item.edmIsShownBy && item.edmIsShownBy.length > 0) {
+        if (item.edmIsShownBy?.length > 0) {
           const title = getTitle(item);
           const timePeriod = getTimePeriod(item);
 
-          // Create Artwork node.
           const artworkNode = {
             id: item.id,
             label: title,
             type: "Artwork",
             image: item.edmIsShownBy[0],
-            timePeriod: timePeriod
+            timePeriod
           };
           nodes.push(artworkNode);
 
-          // Get all artist names.
-          const creatorLabels = getCreatorLabels(item);
+          // Track in timePeriodMap for bounding boxes
+          if (!timePeriodMap.has(timePeriod)) {
+            timePeriodMap.set(timePeriod, []);
+          }
+          timePeriodMap.get(timePeriod).push(artworkNode);
 
-          // For each artist ensure Creator node, and link Creator -> Artwork.
+          // Link to creators
+          const creatorLabels = getCreatorLabels(item);
           creatorLabels.forEach(creatorLabel => {
             const creatorKey = creatorLabel.trim().toLowerCase();
             if (!creatorsMap[creatorKey]) {
@@ -115,7 +118,6 @@ document.addEventListener("DOMContentLoaded", () => {
               };
               nodes.push(creatorsMap[creatorKey]);
             }
-            // Link Creator → Artwork
             links.push({
               source: creatorsMap[creatorKey].id,
               target: artworkNode.id,
@@ -123,34 +125,17 @@ document.addEventListener("DOMContentLoaded", () => {
             });
           });
 
-          // Create or reuse a TimePeriod node for each unique time period.
-          if (!globalTimePeriods.has(timePeriod)) {
-            const timeNode = {
-              id: `time-${timePeriod.replace(/\s+/g, "")}`,
-              label: timePeriod,
-              type: "TimePeriod"
-            };
-            globalTimePeriods.set(timePeriod, timeNode);
-            nodes.push(timeNode);
-          }
-          // Link Artwork -> Global TimePeriod
-          links.push({
-            source: globalTimePeriods.get(timePeriod).id,
-            target: artworkNode.id,
-            label: "created in"
-          });
-
-          // If artwork has multiple artists, add collaboration links.
+          // Collaboration links if multiple creators
           if (creatorLabels.length > 1) {
             for (let i = 0; i < creatorLabels.length; i++) {
               for (let j = i + 1; j < creatorLabels.length; j++) {
                 const key1 = creatorLabels[i].trim().toLowerCase();
                 const key2 = creatorLabels[j].trim().toLowerCase();
-                // Only add if not already present.
+                // Only add if not already present
                 if (!links.some(l =>
                   ((l.source === creatorsMap[key1].id && l.target === creatorsMap[key2].id) ||
-                   (l.source === creatorsMap[key2].id && l.target === creatorsMap[key1].id))
-                   && l.label === "collaborated with"
+                   (l.source === creatorsMap[key2].id && l.target === creatorsMap[key1].id)) &&
+                   l.label === "collaborated with"
                 )) {
                   links.push({
                     source: creatorsMap[key1].id,
@@ -165,7 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
-      // Link each Creator node to the Provider.
+      // Link each Creator to the Provider
       Object.keys(creatorsMap).forEach(key => {
         if (providerNode) {
           links.push({
@@ -176,10 +161,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
-      console.log("Processed nodes:", nodes);
-      console.log("Processed links:", links);
+      // Log
+      console.log("Nodes:", nodes);
+      console.log("Links:", links);
 
-      // Populate the Time Period dropdown.
+      // Populate time period dropdown
       const institutionSelect = document.getElementById("institution");
       if (institutionSelect) {
         institutionSelect.innerHTML = "";
@@ -188,15 +174,16 @@ document.addEventListener("DOMContentLoaded", () => {
         allOption.textContent = "All";
         institutionSelect.appendChild(allOption);
 
-        globalTimePeriods.forEach(timeNode => {
+        // Insert each time period
+        for (const [period] of timePeriodMap) {
           const option = document.createElement("option");
-          option.value = timeNode.label;
-          option.textContent = timeNode.label;
+          option.value = period;
+          option.textContent = period;
           institutionSelect.appendChild(option);
-        });
+        }
       }
 
-      // Create SVG patterns for Artwork nodes.
+      // Artwork patterns
       const defs = container.append("defs");
       nodes.forEach(d => {
         if (d.type === "Artwork" && d.image) {
@@ -212,45 +199,54 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
-      // Set up the force simulation with a column-based X force.
+      //  group to hold  bounding boxes and labels behind everything
+      const timePeriodBackgroundGroup = container.insert("g", ":first-child").attr("class", "timePeriodBackgrounds");
+      //store objects { rect, label, period } update them each tick
+      const boundingBoxes = [];
+
+      for (const [period] of timePeriodMap) {
+        const g = timePeriodBackgroundGroup.append("g").attr("class", "timePeriodBox");
+        const rect = g.append("rect")
+          .attr("fill", "rgba(200,200,255,0.15)")
+          .attr("stroke", "rgba(120,120,255,0.5)")
+          .attr("stroke-width", 1);
+        const label = g.append("text")
+          .attr("fill", "blue")
+          .attr("font-size", 14)
+          .attr("font-weight", "bold")
+          .text(period);
+
+        boundingBoxes.push({ period, rect, label });
+      }
+
+      // Force simulation with columns
       let simulation = d3.forceSimulation(nodes)
         .force("link", d3.forceLink(links)
           .id(d => d.id)
           .distance(link => {
-            // Tweak distances to spread out the columns.
             if (link.label === "affiliated with") return 250; 
-            if (link.label === "created in")    return 75;  
-            if (link.label === "created")       return 100; 
-            if (link.collaborative)             return 80;  
+            if (link.label === "created")         return 100; 
+            if (link.collaborative)               return 80;  
             return 150;
           })
         )
         .force("charge", d3.forceManyBody().strength(-30))
-        // Force each type of node into a specific column on the X axis:
         .force("forceX", d3.forceX(d => {
           switch (d.type) {
-            case "Provider":
-              return 100;   // far left
-            case "Creator":
-              return 300;   // next column
-            case "Artwork":
-              return 550;   // center-ish
-            case "TimePeriod":
-              return 800;   // far right
-            default:
-              return 550;
+            case "Provider": return 100;
+            case "Creator":  return 300;
+            case "Artwork":  return 550;
+            default:         return 550;
           }
         }).strength(0.2))
-        // Slight vertical centering:
         .force("forceY", d3.forceY(height / 2).strength(0.1))
         .force("collide", d3.forceCollide().radius(d => {
           if (d.type === "Provider") return 30;
           if (d.type === "Creator")  return 20;
-          if (d.type === "TimePeriod") return 25;
           return 15; // Artwork
         }).iterations(2));
 
-      // Draw links and nodes inside the zoomable container.
+      // Link & node groups
       const linkGroup = container.append("g").attr("class", "links");
       const nodeGroup = container.append("g").attr("class", "nodes");
 
@@ -259,61 +255,52 @@ document.addEventListener("DOMContentLoaded", () => {
         .join("line")
         .attr("stroke", d => d.collaborative ? "red" : "#aaa")
         .attr("stroke-opacity", 0.8)
-        .attr("stroke-width", 2)
-        // Make "created in" lines dotted:
-        .attr("stroke-dasharray", d => d.label === "created in" ? "5,5" : null);
+        .attr("stroke-width", 2);
 
       let nodeSel = nodeGroup.selectAll("circle")
         .data(nodes)
         .join("circle")
         .attr("r", d => {
-          if (d.type === "Provider")   return 20;
-          if (d.type === "Creator")    return 10;
-          if (d.type === "TimePeriod") return 15;
+          if (d.type === "Provider") return 20;
+          if (d.type === "Creator")  return 10;
           return 12;
         })
         .attr("fill", d => {
           if (d.type === "Artwork" && d.image) {
-            return "url(#pattern-" + d.id + ")";
+            return `url(#pattern-${d.id})`;
           } else if (d.type === "Provider") {
             return "gold";
           } else if (d.type === "Creator") {
             return "darkgreen";
-          } else if (d.type === "TimePeriod") {
-            return "cornflowerblue";
           }
           return "steelblue";
         })
         .attr("stroke", d => {
-          if (d.type === "Artwork")    return "steelblue";
-          if (d.type === "Provider")   return "gold";
-          if (d.type === "Creator")    return "darkgreen";
-          if (d.type === "TimePeriod") return "cornflowerblue";
+          if (d.type === "Artwork")  return "steelblue";
+          if (d.type === "Provider") return "gold";
+          if (d.type === "Creator")  return "darkgreen";
           return "#fff";
         })
         .attr("stroke-width", 2)
         .call(d3.drag()
           .on("start", dragStarted)
           .on("drag", dragged)
-          .on("end", dragEnded));
+          .on("end", dragEnded)
+        );
 
-      // Tooltip and node enlargement.
+      // Tooltip
       nodeSel.on("mouseover", (event, d) => {
         d3.select(event.currentTarget)
           .transition()
           .duration(200)
           .attr("r", () => {
-            if (d.type === "Provider")   return 20 * 1.5;
-            if (d.type === "Creator")    return 10 * 1.5;
-            if (d.type === "TimePeriod") return 15 * 1.5;
+            if (d.type === "Provider") return 20 * 1.5;
+            if (d.type === "Creator")  return 10 * 1.5;
             return 12 * 1.5;
           });
         let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
         if (d.type === "Artwork" && d.image) {
           tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
-        }
-        if (d.type === "TimePeriod") {
-          tooltipContent = `<strong>Time Period:</strong> ${d.label}`;
         }
         tooltip.transition().duration(200).style("opacity", 1);
         tooltip.html(tooltipContent)
@@ -324,23 +311,301 @@ document.addEventListener("DOMContentLoaded", () => {
           .transition()
           .duration(200)
           .attr("r", () => {
-            if (d.type === "Provider")   return 20;
-            if (d.type === "Creator")    return 10;
-            if (d.type === "TimePeriod") return 15;
+            if (d.type === "Provider") return 20;
+            if (d.type === "Creator")  return 10;
             return 12;
           });
         tooltip.transition().duration(200).style("opacity", 0);
       });
 
+      // On each tick, update node positions & bounding boxes
       simulation.on("tick", () => {
         linkSel
           .attr("x1", d => d.source.x)
           .attr("y1", d => d.source.y)
           .attr("x2", d => d.target.x)
           .attr("y2", d => d.target.y);
+
         nodeSel
           .attr("cx", d => d.x)
           .attr("cy", d => d.y);
+
+        // Update bounding boxes for each time period
+        boundingBoxes.forEach(({ period, rect, label }) => {
+          const artworks = timePeriodMap.get(period) || [];
+          if (!artworks.length) return;
+
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          artworks.forEach(artNode => {
+            // find the actual node in 'nodes'
+            const node = nodes.find(n => n.id === artNode.id);
+            if (node) {
+              if (node.x < minX) minX = node.x;
+              if (node.x > maxX) maxX = node.x;
+              if (node.y < minY) minY = node.y;
+              if (node.y > maxY) maxY = node.y;
+            }
+          });
+
+          if (minX === Infinity) return; // no valid positions
+
+          // Add padding
+          const pad = 20;
+          minX -= pad; minY -= pad;
+          maxX += pad; maxY += pad;
+
+          rect
+            .attr("x", minX)
+            .attr("y", minY)
+            .attr("width", maxX - minX)
+            .attr("height", maxY - minY);
+
+          label
+            .attr("x", minX + 5)
+            .attr("y", minY + 15);
+        });
+      });
+
+      // Filter: Time Period only
+      document.getElementById("applyFilters").addEventListener("click", () => {
+        const selectedTime = institutionSelect.value;
+        console.log("Selected time for filter:", selectedTime);
+
+        const filteredNodes = [];
+        const filteredLinks = [];
+        const filteredNodeIds = new Set();
+
+        // Always keep provider
+        if (providerNode) {
+          filteredNodes.push(providerNode);
+          filteredNodeIds.add(providerNode.id);
+        }
+
+        // Artwork filter
+        const filteredArtworks = (selectedTime === "all")
+          ? nodes.filter(n => n.type === "Artwork")
+          : nodes.filter(n => n.type === "Artwork" && n.timePeriod === selectedTime);
+
+        filteredArtworks.forEach(a => {
+          filteredNodes.push(a);
+          filteredNodeIds.add(a.id);
+        });
+
+        // Include creators of these artworks
+        links.forEach(l => {
+          if (l.label === "created") {
+            const tId = (typeof l.target === "object") ? l.target.id : l.target;
+            if (filteredNodeIds.has(tId)) {
+              const sId = (typeof l.source === "object") ? l.source.id : l.source;
+              if (!filteredNodeIds.has(sId)) {
+                const cNode = nodes.find(n => n.id === sId);
+                if (cNode) {
+                  filteredNodes.push(cNode);
+                  filteredNodeIds.add(cNode.id);
+                }
+              }
+            }
+          }
+        });
+
+        // Rebuild links
+        links.forEach(l => {
+          const sId = (typeof l.source === "object") ? l.source.id : l.source;
+          const tId = (typeof l.target === "object") ? l.target.id : l.target;
+          if (filteredNodeIds.has(sId) && filteredNodeIds.has(tId)) {
+            filteredLinks.push(l);
+          }
+        });
+
+        // Clear
+        container.selectAll("*").remove();
+
+        // Recreate Artwork patterns
+        const newDefs = container.append("defs");
+        filteredNodes.forEach(d => {
+          if (d.type === "Artwork" && d.image) {
+            newDefs.append("pattern")
+              .attr("id", `pattern-${d.id}`)
+              .attr("width", 1)
+              .attr("height", 1)
+              .append("image")
+              .attr("xlink:href", d.image)
+              .attr("width", 20)
+              .attr("height", 20)
+              .attr("preserveAspectRatio", "xMidYMid slice");
+          }
+        });
+
+        // Build new timePeriodMap for bounding boxes in the filtered set
+        const newTimePeriodMap = new Map();
+        filteredNodes.forEach(n => {
+          if (n.type === "Artwork") {
+            if (!newTimePeriodMap.has(n.timePeriod)) {
+              newTimePeriodMap.set(n.timePeriod, []);
+            }
+            newTimePeriodMap.get(n.timePeriod).push(n);
+          }
+        });
+
+        // Create bounding boxes for the filtered set
+        const newTimePeriodBackgroundGroup = container.insert("g", ":first-child").attr("class", "timePeriodBackgrounds");
+        const newBoundingBoxes = [];
+
+        for (const [period] of newTimePeriodMap) {
+          const g = newTimePeriodBackgroundGroup.append("g").attr("class", "timePeriodBox");
+          const rect = g.append("rect")
+            .attr("fill", "rgba(200,200,255,0.15)")
+            .attr("stroke", "rgba(120,120,255,0.5)")
+            .attr("stroke-width", 1);
+          const label = g.append("text")
+            .attr("fill", "blue")
+            .attr("font-size", 14)
+            .attr("font-weight", "bold")
+            .text(period);
+          newBoundingBoxes.push({ period, rect, label });
+        }
+
+        // Link & Node groups
+        const newLinkGroup = container.append("g").attr("class", "links");
+        const newNodeGroup = container.append("g").attr("class", "nodes");
+
+        // Force simulation again
+        simulation = d3.forceSimulation(filteredNodes)
+          .force("link", d3.forceLink(filteredLinks)
+            .id(d => d.id)
+            .distance(link => {
+              if (link.label === "affiliated with") return 250; 
+              if (link.label === "created")         return 100; 
+              if (link.collaborative)               return 80;  
+              return 150;
+            })
+          )
+          .force("charge", d3.forceManyBody().strength(-30))
+          .force("forceX", d3.forceX(d => {
+            switch (d.type) {
+              case "Provider": return 100;
+              case "Creator":  return 300;
+              case "Artwork":  return 550;
+              default:         return 550;
+            }
+          }).strength(0.2))
+          .force("forceY", d3.forceY(height / 2).strength(0.1))
+          .force("collide", d3.forceCollide().radius(d => {
+            if (d.type === "Provider") return 30;
+            if (d.type === "Creator")  return 20;
+            return 15;
+          }).iterations(2));
+
+        const newLinkSel = newLinkGroup.selectAll("line")
+          .data(filteredLinks)
+          .join("line")
+          .attr("stroke", d => d.collaborative ? "red" : "#aaa")
+          .attr("stroke-opacity", 0.8)
+          .attr("stroke-width", 2);
+
+        const newNodeSel = newNodeGroup.selectAll("circle")
+          .data(filteredNodes)
+          .join("circle")
+          .attr("r", d => {
+            if (d.type === "Provider") return 20;
+            if (d.type === "Creator")  return 10;
+            return 12;
+          })
+          .attr("fill", d => {
+            if (d.type === "Artwork" && d.image) {
+              return `url(#pattern-${d.id})`;
+            } else if (d.type === "Provider") {
+              return "gold";
+            } else if (d.type === "Creator") {
+              return "darkgreen";
+            }
+            return "steelblue";
+          })
+          .attr("stroke", d => {
+            if (d.type === "Artwork")  return "steelblue";
+            if (d.type === "Provider") return "gold";
+            if (d.type === "Creator")  return "darkgreen";
+            return "#fff";
+          })
+          .attr("stroke-width", 2)
+          .call(d3.drag()
+            .on("start", dragStarted)
+            .on("drag", dragged)
+            .on("end", dragEnded)
+          );
+
+        newNodeSel.on("mouseover", (event, d) => {
+          d3.select(event.currentTarget)
+            .transition()
+            .duration(200)
+            .attr("r", () => {
+              if (d.type === "Provider") return 20 * 1.5;
+              if (d.type === "Creator")  return 10 * 1.5;
+              return 12 * 1.5;
+            });
+          let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
+          if (d.type === "Artwork" && d.image) {
+            tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
+          }
+          tooltip.transition().duration(200).style("opacity", 1);
+          tooltip.html(tooltipContent)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        }).on("mouseout", (event, d) => {
+          d3.select(event.currentTarget)
+            .transition()
+            .duration(200)
+            .attr("r", () => {
+              if (d.type === "Provider") return 20;
+              if (d.type === "Creator")  return 10;
+              return 12;
+            });
+          tooltip.transition().duration(200).style("opacity", 0);
+        });
+
+        simulation.on("tick", () => {
+          newLinkSel
+            .attr("x1", d => d.source.x)
+            .attr("y1", d => d.source.y)
+            .attr("x2", d => d.target.x)
+            .attr("y2", d => d.target.y);
+
+          newNodeSel
+            .attr("cx", d => d.x)
+            .attr("cy", d => d.y);
+
+          // Update bounding boxes
+          newBoundingBoxes.forEach(({ period, rect, label }) => {
+            const periodArtworks = newTimePeriodMap.get(period) || [];
+            if (!periodArtworks.length) return;
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            periodArtworks.forEach(art => {
+              const node = filteredNodes.find(n => n.id === art.id);
+              if (node) {
+                if (node.x < minX) minX = node.x;
+                if (node.x > maxX) maxX = node.x;
+                if (node.y < minY) minY = node.y;
+                if (node.y > maxY) maxY = node.y;
+              }
+            });
+            if (minX === Infinity) return;
+            const pad = 20;
+            minX -= pad; minY -= pad;
+            maxX += pad; maxY += pad;
+
+            rect
+              .attr("x", minX)
+              .attr("y", minY)
+              .attr("width", maxX - minX)
+              .attr("height", maxY - minY);
+            label
+              .attr("x", minX + 5)
+              .attr("y", minY + 15);
+          });
+        });
+
+        simulation.alpha(1).restart();
       });
 
       function dragStarted(event, d) {
@@ -357,233 +622,6 @@ document.addEventListener("DOMContentLoaded", () => {
         d.fx = null;
         d.fy = null;
       }
-
-      // -------------------------------
-      // FILTERING: Reset and redraw graph based on selected time period.
-      // -------------------------------
-      document.getElementById("applyFilters").addEventListener("click", () => {
-        console.log("Apply Filters button clicked");
-        const selectedTime = document.getElementById("institution").value;
-        console.log("Selected time period:", selectedTime);
-
-        const filteredNodes = [];
-        const filteredLinks = [];
-        const filteredNodeIds = new Set();
-
-        // Always include  Provider node.
-        if (providerNode) {
-          filteredNodes.push(providerNode);
-          filteredNodeIds.add(providerNode.id);
-        }
-
-        // Filter for the global TimePeriod node(s).
-        let filteredTimeNodes = [];
-        if (selectedTime !== "all") {
-          filteredTimeNodes = nodes.filter(n => n.type === "TimePeriod" && n.label === selectedTime);
-        } else {
-          filteredTimeNodes = nodes.filter(n => n.type === "TimePeriod");
-        }
-        filteredTimeNodes.forEach(timeNode => {
-          filteredNodes.push(timeNode);
-          filteredNodeIds.add(timeNode.id);
-        });
-
-        // Filter Artwork nodes: include only those whose timePeriod matches
-        const filteredArtworks = nodes.filter(n =>
-          n.type === "Artwork" && (selectedTime === "all" || n.timePeriod === selectedTime)
-        );
-        filteredArtworks.forEach(artwork => {
-          filteredNodes.push(artwork);
-          filteredNodeIds.add(artwork.id);
-        });
-
-        // Include Creator nodes that are linked to any filtered Artwork
-        links.forEach(l => {
-          if (l.label === "created") {
-            const targetId = typeof l.target === "object" ? l.target.id : l.target;
-            if (filteredNodeIds.has(targetId)) {
-              const sourceId = typeof l.source === "object" ? l.source.id : l.source;
-              if (!filteredNodeIds.has(sourceId)) {
-                const creatorNode = nodes.find(n => n.id === sourceId);
-                if (creatorNode) {
-                  filteredNodes.push(creatorNode);
-                  filteredNodeIds.add(creatorNode.id);
-                }
-              }
-            }
-          }
-        });
-
-        // Rebuild links: only include links whose both endpoints are in filteredNodes
-        links.forEach(l => {
-          const sourceId = typeof l.source === "object" ? l.source.id : l.source;
-          const targetId = typeof l.target === "object" ? l.target.id : l.target;
-          if (filteredNodeIds.has(sourceId) && filteredNodeIds.has(targetId)) {
-            filteredLinks.push(l);
-          }
-        });
-
-        console.log("Filtered nodes:", filteredNodes);
-        console.log("Filtered links:", filteredLinks);
-
-        // Clear current container content
-        container.selectAll("*").remove();
-
-        // Recreate artwork patterns.
-        const newDefs = container.append("defs");
-        filteredNodes.forEach(d => {
-          if (d.type === "Artwork" && d.image) {
-            newDefs.append("pattern")
-              .attr("id", "pattern-" + d.id)
-              .attr("width", 1)
-              .attr("height", 1)
-              .append("image")
-              .attr("xlink:href", d.image)
-              .attr("width", 20)
-              .attr("height", 20)
-              .attr("preserveAspectRatio", "xMidYMid slice");
-          }
-        });
-
-        // Create new groups for links and nodes.
-        const newLinkGroup = container.append("g").attr("class", "links");
-        const newNodeGroup = container.append("g").attr("class", "nodes");
-
-        // Recreate the simulation with filtered data.
-        simulation = d3.forceSimulation(filteredNodes)
-          .force("link", d3.forceLink(filteredLinks)
-            .id(d => d.id)
-            .distance(link => {
-              if (link.label === "affiliated with") return 180;
-              if (link.label === "created in")    return 60;
-              if (link.label === "created")       return 80;
-              if (link.collaborative)             return 80;
-              return 100;
-            })
-          )
-          .force("charge", d3.forceManyBody().strength(-20))
-          .force("forceX", d3.forceX(d => {
-            switch (d.type) {
-              case "Provider":
-                return 100;
-              case "Creator":
-                return 300;
-              case "Artwork":
-                return 550;
-              case "TimePeriod":
-                return 800;
-              default:
-                return 550;
-            }
-          }).strength(0.2))
-          .force("forceY", d3.forceY(height / 2).strength(0.1))
-          .force("collide", d3.forceCollide().radius(20).iterations(1));
-
-        const newLinkSel = newLinkGroup.selectAll("line")
-          .data(filteredLinks)
-          .join("line")
-          .attr("stroke", d => d.collaborative ? "red" : "#aaa")
-          .attr("stroke-opacity", 0.8)
-          .attr("stroke-width", 2)
-          // Make "created in" lines dotted:
-          .attr("stroke-dasharray", d => d.label === "created in" ? "5,5" : null);
-
-        const newNodeSel = newNodeGroup.selectAll("circle")
-          .data(filteredNodes)
-          .join("circle")
-          .attr("r", d => {
-            if (d.type === "Provider")   return 20;
-            if (d.type === "Creator")    return 10;
-            if (d.type === "TimePeriod") return 15;
-            return 12;
-          })
-          .attr("fill", d => {
-            if (d.type === "Artwork" && d.image) {
-              return "url(#pattern-" + d.id + ")";
-            } else if (d.type === "Provider") {
-              return "gold";
-            } else if (d.type === "Creator") {
-              return "darkgreen";
-            } else if (d.type === "TimePeriod") {
-              return "cornflowerblue";
-            }
-            return "steelblue";
-          })
-          .attr("stroke", d => {
-            if (d.type === "Artwork")    return "steelblue";
-            if (d.type === "Provider")   return "gold";
-            if (d.type === "Creator")    return "darkgreen";
-            if (d.type === "TimePeriod") return "cornflowerblue";
-            return "#fff";
-          })
-          .attr("stroke-width", 2)
-          .call(d3.drag()
-            .on("start", dragStarted)
-            .on("drag", dragged)
-            .on("end", dragEnded));
-
-        newNodeSel.on("mouseover", (event, d) => {
-          d3.select(event.currentTarget)
-            .transition()
-            .duration(200)
-            .attr("r", () => {
-              if (d.type === "Provider")   return 20 * 1.5;
-              if (d.type === "Creator")    return 10 * 1.5;
-              if (d.type === "TimePeriod") return 15 * 1.5;
-              return 12 * 1.5;
-            });
-          let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
-          if (d.type === "Artwork" && d.image) {
-            tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
-          }
-          if (d.type === "TimePeriod") {
-            tooltipContent = `<strong>Time Period:</strong> ${d.label}`;
-          }
-          tooltip.transition().duration(200).style("opacity", 1);
-          tooltip.html(tooltipContent)
-            .style("left", (event.pageX + 10) + "px")
-            .style("top", (event.pageY + 10) + "px");
-        }).on("mouseout", (event, d) => {
-          d3.select(event.currentTarget)
-            .transition()
-            .duration(200)
-            .attr("r", () => {
-              if (d.type === "Provider")   return 20;
-              if (d.type === "Creator")    return 10;
-              if (d.type === "TimePeriod") return 15;
-              return 12;
-            });
-          tooltip.transition().duration(200).style("opacity", 0);
-        });
-
-        simulation.on("tick", () => {
-          newLinkSel
-            .attr("x1", d => d.source.x)
-            .attr("y1", d => d.source.y)
-            .attr("x2", d => d.target.x)
-            .attr("y2", d => d.target.y);
-          newNodeSel
-            .attr("cx", d => d.x)
-            .attr("cy", d => d.y);
-        });
-
-        simulation.alpha(1).restart();
-
-        function dragStarted(event, d) {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x;
-          d.fy = d.y;
-        }
-        function dragged(event, d) {
-          d.fx = event.x;
-          d.fy = event.y;
-        }
-        function dragEnded(event, d) {
-          if (!event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
-        }
-      });
     })
     .catch(error => console.error("Error fetching data:", error));
 });
