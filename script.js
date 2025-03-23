@@ -1,10 +1,12 @@
 document.addEventListener("DOMContentLoaded", () => {
   const API_KEY = "renscarklone";
-  const ARTIST_QUERY = "Johannes Vermeer";  // The artist to query
+  const ARTIST_QUERY = "Vermeer";  // The artist to query
+  // other artist can be Rijn Van Rembrandt
+  //however Johannes Vermeer shows collaborators thus better for testing
   const PROVIDER = "Rijksmuseum";           // Using Rijksmuseum as DATA_PROVIDER
   const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
 
-  // --- Helpers ---
+  // Helpers
   function getTitle(item) { //extracting title of artwork
     if (item.title?.length > 0) return item.title[0];
     if (item.dcTitleLangAware?.def?.length > 0) {
@@ -33,6 +35,17 @@ document.addEventListener("DOMContentLoaded", () => {
     return "Unknown Period";
   }
 
+
+
+
+
+
+
+
+
+
+
+  
   // Fetch Data from api
   fetch(API_URL)
     .then(response => response.json()) //convert response to json
@@ -359,6 +372,9 @@ document.addEventListener("DOMContentLoaded", () => {
           minX -= pad; minY -= pad;
           maxX += pad; maxY += pad;
 
+
+        
+
           rect
             .attr("x", minX)
             .attr("y", minY)
@@ -568,6 +584,9 @@ document.addEventListener("DOMContentLoaded", () => {
           tooltip.transition().duration(200).style("opacity", 0);
         });
 
+
+
+
         simulation.on("tick", () => {
           newLinkSel
             .attr("x1", d => d.source.x)
@@ -704,6 +723,94 @@ document.addEventListener("DOMContentLoaded", () => {
       //
       // TIMELINE END
       //
+
+
+
+
+
+
+
+
+
+
+
+
+     // === LEAFLET MAP INTEGRATION ===
+
+// Global variable to access markers in the filter too
+let mapPoints = [];
+
+// Build mapPoints array from items with coordinates
+items.forEach(item => {
+  const lat = item.edmPlaceLatitude?.[0];
+  const lon = item.edmPlaceLongitude?.[0];
+  if (lat && lon) {
+    mapPoints.push({
+
+      lat: parseFloat(lat),
+      lon: parseFloat(lon),
+      title: getTitle(item),
+      creators: getCreatorLabels(item),
+      image: item.edmIsShownBy?.[0],
+      timePeriod: getTimePeriod(item)
+    });
+
+  }
+});
+
+// Create map
+const map = L.map("map").setView([52.37, 4.89], 5); // Default to Amsterdam - change later to default based on centre of most artworks retreived from query
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "&copy; OpenStreetMap contributors"
+}).addTo(map);
+
+// Marker layer group
+const markerLayer = L.layerGroup().addTo(map);
+
+// Helper to add markers
+function updateMapMarkers(points) {
+  markerLayer.clearLayers();
+  points.forEach(p => {
+    const popupContent = `
+      <div style="max-width:200px">
+        ${p.image ? `<img src="${p.image}" style="width:100%; margin-bottom: 5px;">` : ""}
+        <strong>${p.title}</strong><br>
+        <em>${p.creators.join(", ")}</em>
+      </div>
+    `;
+    L.marker([p.lat, p.lon]).addTo(markerLayer).bindPopup(popupContent);
+  });
+
+  if (points.length > 0) {
+    const bounds = points.map(p => [p.lat, p.lon]);
+    map.fitBounds(bounds, { padding: [20, 20] });
+  }
+}
+
+// Initial display
+updateMapMarkers(mapPoints);
+
+// Hook into existing time period filter
+document.getElementById("applyFilters").addEventListener("click", () => {
+  const selectedTime = document.getElementById("institution").value;
+  const filteredPoints = (selectedTime === "all")
+    ? mapPoints
+    : mapPoints.filter(p => p.timePeriod === selectedTime);
+  updateMapMarkers(filteredPoints);
+});
+
+
+
+
+
+
+
+
+
+
+
+//error 
+
 
 
 
