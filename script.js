@@ -872,8 +872,24 @@ document.addEventListener("DOMContentLoaded", () => {
           tooltip.transition().duration(200).style("opacity", 0);
         })
         .on("click", function (event, d) {
-          // TO ADD: Clicking an artwork marker could  highlight the artwork in the network graph.
           console.log("Artwork clicked:", d.artwork.label);
+          const artworkId = d.artwork.id;
+          
+          // Reset strokes for all nodes back to default styles.
+          d3.selectAll(".nodes circle")
+            .attr("stroke", function(nodeData) {
+              if (nodeData.type === "Artwork") return "steelblue";
+              if (nodeData.type === "Provider") return "gold";
+              if (nodeData.type === "Creator") return "darkgreen";
+              return "#fff";
+            })
+            .attr("stroke-width", 2);
+          
+          // Highlight clicked artwork node by updating stroke style.
+          d3.selectAll(".nodes circle")
+            .filter(nodeData => nodeData.id === artworkId)
+            .attr("stroke", "red")
+            .attr("stroke-width", 4);
         });
 
       timelineSvg.selectAll(".unknownArtworkMarker")
