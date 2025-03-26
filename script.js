@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const API_KEY = "renscarklone";
-  const ARTIST_QUERY = "Vermeer";  // The artist to query
+  const API_KEY = "teradowls";
+  const ARTIST_QUERY = "Johannes Vermeer";  // The artist to query
   // other artist can be Rijn Van Rembrandt
   //however Johannes Vermeer shows collaborators thus better for testing
   const PROVIDER = "Rijksmuseum";           // Using Rijksmuseum as DATA_PROVIDER
@@ -37,6 +37,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+  function getMediaType(item) {
+    // If English array with content return the first element
+    if (item.dcTypeLangAware?.en?.length > 0) {
+      return item.dcTypeLangAware.en[0]; // e.g. "painting"
+    }
+    //fall back to "def"
+    if (item.dcTypeLangAware?.def?.length > 0) {
+      return item.dcTypeLangAware.def[0]; // URL/ long text unfortunately
+    }
+    //  If no info, default to "Artwork"
+    return "Artwork";
+  }
 
 
 
@@ -45,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-  
+
   // Fetch Data from api
   fetch(API_URL)
     .then(response => response.json()) //convert response to json
@@ -108,11 +120,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (item.edmIsShownBy?.length > 0) {
           const title = getTitle(item);
           const timePeriod = getTimePeriod(item);
+          const mediaType = getMediaType(item);
+
           //creating artwork node
           const artworkNode = {
             id: item.id,
             label: title,
             type: "Artwork",
+            medium: getMediaType(item),
             image: item.edmIsShownBy[0],
             timePeriod
           };
@@ -219,7 +234,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       //  group to hold  bounding boxes and labels behind everything
       const timePeriodBackgroundGroup = container.insert("g", ":first-child").attr("class", "timePeriodBackgrounds");
-      //store objects { rect, label, period } update them each tick
+      //store objects { rect, label, period } update  each tick
       const boundingBoxes = [];
 
       for (const [period] of timePeriodMap) {
@@ -262,7 +277,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (d.type === "Provider") return 30;
           if (d.type === "Creator") return 20;
           return 15; // Artwork
-        }).iterations(2));
+        }).iterations(2))
 
       // Link & node groups
       const linkGroup = container.append("g").attr("class", "links");
@@ -316,7 +331,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (d.type === "Creator") return 10 * 1.5;
             return 12 * 1.5;
           });
-        let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
+        let tooltipContent = `<strong>${d.label}</strong><br>
+          Type: ${d.type} <br>
+          Medium: ${d.medium}`;
         if (d.type === "Artwork" && d.image) {
           tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
         }
@@ -373,7 +390,7 @@ document.addEventListener("DOMContentLoaded", () => {
           maxX += pad; maxY += pad;
 
 
-        
+
 
           rect
             .attr("x", minX)
@@ -468,6 +485,30 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         });
 
+
+                // Build an array of the time periods
+                // Gather time periods
+        const periodList = Array.from(timePeriodMap.keys());
+
+        // Sort them by numeric year 
+        function parseNumericYear(periodLabel) {
+          const match = periodLabel.match(/\d{3,4}/);
+          if (match) return +match[0];
+          return 0; // fallback
+        }
+        periodList.sort((a, b) => parseNumericYear(a) - parseNumericYear(b));
+
+            //Define angle scale
+        const angleScale = d3.scaleBand()
+        .domain(periodList)         // the sorted list of time periods
+        .range([0, 2 * Math.PI])    // full circle
+        .padding(0.1);              // optional spacing
+
+        // For radius, spread  from 100..500 in increasing steps:
+        const radiusScale = d3.scaleLinear()
+        .domain([0, periodList.length - 1])
+        .range([100, 500]);
+
         // Create bounding boxes for the filtered set
         const newTimePeriodBackgroundGroup = container.insert("g", ":first-child").attr("class", "timePeriodBackgrounds");
         const newBoundingBoxes = [];
@@ -496,27 +537,47 @@ document.addEventListener("DOMContentLoaded", () => {
             .id(d => d.id)
             .distance(link => {
               if (link.label === "affiliated with") return 250;
-              if (link.label === "created") return 100;
+              if (link.label === "created") return 200;
               if (link.collaborative) return 80;
               return 150;
             })
           )
           .force("charge", d3.forceManyBody().strength(-30))
-          .force("forceX", d3.forceX(d => {
-            switch (d.type) {
-              case "Provider": return 100;
-              case "Creator": return 300;
-              case "Artwork": return 550;
-              default: return 550;
-            }
-          }).strength(0.2))
-          .force("forceY", d3.forceY(height / 2).strength(0.1))
           .force("collide", d3.forceCollide().radius(d => {
-            if (d.type === "Provider") return 30;
+            // up to you
             if (d.type === "Creator") return 20;
             return 15;
-          }).iterations(2));
-
+          }).iterations(2))  
+          //  position Artwork by angle, radius
+          .force("x", d3.forceX(d => {
+            if (d.type === "Artwork") {
+              const i = periodList.indexOf(d.timePeriod); 
+              if (i === -1) {
+                // if it's unknown or not in the list
+                return width / 2; 
+              }
+              // Get angle and radius
+              const angle = angleScale(d.timePeriod);
+              const r = radiusScale(i);
+              return (width / 2) + r * Math.cos(angle);
+            }
+            // Creator/Provider => center
+            return width / 2;
+          }).strength(1))
+          .force("y", d3.forceY(d => {
+            if (d.type === "Artwork") {
+              const i = periodList.indexOf(d.timePeriod);
+              if (i === -1) {
+                return height / 2;
+              }
+              const angle = angleScale(d.timePeriod);
+              const r = radiusScale(i);
+              return (height / 2) + r * Math.sin(angle);
+            }
+            // Creator/Provider => center
+            return height / 2;
+          }).strength(1));
+          
         const newLinkSel = newLinkGroup.selectAll("line")
           .data(filteredLinks)
           .join("line")
@@ -564,7 +625,7 @@ document.addEventListener("DOMContentLoaded", () => {
               if (d.type === "Creator") return 10 * 1.5;
               return 12 * 1.5;
             });
-          let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type}`;
+          let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type} <br>Medium: ${d.medium}`;
           if (d.type === "Artwork" && d.image) {
             tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
           }
@@ -647,82 +708,184 @@ document.addEventListener("DOMContentLoaded", () => {
         d.fy = null;
       }
 
-
-      //
-      // TIMELINE START
-      //
-
-      //  container for the timeline
+      // Draw Timeline Background with Grouping ---
+      //  create a separate timeline SVG that groups artworks by time period.
       const timelineWidth = 900;
       const timelineHeight = 150;
       const timelineMargin = { top: 20, right: 20, bottom: 20, left: 40 };
 
+      // Create an SVG for the timeline in the element with id "timeline".
       const timelineSvg = d3.select("#timeline")
         .append("svg")
         .attr("width", timelineWidth)
         .attr("height", timelineHeight);
 
-      // Parse numeric years if possible
-      // attempt to extract a numeric year from the timePeriod label using a simple regex.
-      // If no numeric year is found -  treat it as 0 so they appear on the far left.
+      // Helper to extract a numeric year from a period label using a regex.
       function parseYear(label) {
-        // Attempt to match a 4-digit e.g. "1650" or "1641" or "1632/1634"
         const match = label.match(/\d{3,4}/);
-        if (match) {
-          return +match[0];
-        }
-        return 0; // fallback
+        if (match) return +match[0];
+        return 0;
       }
 
-      const timelineData = [];
-      for (const [period] of timePeriodMap) {
-        timelineData.push({ label: period, year: parseYear(period) });
-      }
+      // Build timeline data from the unique time periods.
+      const timelineData = Array.from(timePeriodMap.entries())
+        .filter(([_, artworks]) => artworks.length > 0)
+        .map(([period, artworks]) => ({
+          label: period,
+          year: parseYear(period)
+        }))
+        .filter(d => d.year > 0); // remove "Unknown" for the timeline 
 
-      // Sort timeline data by numeric year
-      timelineData.sort((a, b) => a.year - b.year);
+      const timelineDataRaw = Array.from(timePeriodMap.entries())
+        .filter(([_, artworks]) => artworks.length > 0)
+        .map(([period, artworks]) => ({
+          label: period,
+          year: parseYear(period)
+        }));
 
-      // Build scales
+      const knownTimelineData = timelineDataRaw.filter(d => d.year > 0);
+      const unknownTimelineData = timelineDataRaw.filter(d => d.year === 0); // "Unknown"
+
+
+      const unknownX = timelineMargin.left - 40; // to the left of the timeline
+
+      // Circle
+      timelineSvg.selectAll(".unknownCircle")
+        .data(unknownTimelineData)
+        .join("circle")
+        .attr("class", "unknownCircle")
+        .attr("cx", unknownX)
+        .attr("cy", timelineHeight / 2)
+        .attr("r", 8)
+        .attr("fill", "#007acc")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1);
+
+      // Label
+      timelineSvg.selectAll(".unknownLabel")
+        .data(unknownTimelineData)
+        .join("text")
+        .attr("class", "unknownLabel")
+        .attr("x", unknownX)
+        .attr("y", (timelineHeight / 2) - 16)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#333")
+        .attr("font-size", 12)
+        .text("Unknown");
+
+
+
+
+      // Create a linear scale to map numeric years to positions on the timeline.
       const xExtent = d3.extent(timelineData, d => d.year);
-      // If everything is 0 or unknown set a dummy scale
       const xScale = d3.scaleLinear()
-        .domain([xExtent[0] || 0, xExtent[1] || 100]) // fallback
+        .domain([xExtent[0] || 0, xExtent[1] || 100])
         .range([timelineMargin.left, timelineWidth - timelineMargin.right]);
 
-      // Create axis
+      // Create an axis for the timeline.
       const xAxis = d3.axisBottom(xScale)
         .tickFormat(d => (d === 0 ? "Unknown" : d));
-
       timelineSvg.append("g")
         .attr("transform", `translate(0,${timelineHeight - timelineMargin.bottom})`)
-
         .call(xAxis);
 
-      // Plot points for each time period
+      // --- Add Time Period Markers ---
+      // Plot a circle for each unique time period.
       timelineSvg.selectAll(".timelineCircle")
         .data(timelineData)
         .join("circle")
         .attr("class", "timelineCircle")
         .attr("cx", d => xScale(d.year))
         .attr("cy", timelineHeight / 2)
-        .attr("r", 6)
-        .attr("fill", "#007acc");
+        .attr("r", 8)
+        .attr("fill", "#007acc")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1)
+        .on("mouseover", function (event, d) {
+          d3.select(this).attr("r", 12);
+          tooltip.transition().duration(200).style("opacity", 1);
+          tooltip.html(`<strong>${d.label}</strong><br>Year: ${d.year || "Unknown"}`)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", function (event, d) {
+          d3.select(this).attr("r", 8);
+          tooltip.transition().duration(200).style("opacity", 0);
+        })
+        .on("click", function (event, d) {
+          // Clicking a time period marker sets the dropdown value and triggers the filter.
+          document.getElementById("institution").value = d.label;
+          document.getElementById("applyFilters").click();
+        });
 
-      // Add labels
+      //  text labels above each timeline marker.
       timelineSvg.selectAll(".timelineLabel")
         .data(timelineData)
         .join("text")
         .attr("class", "timelineLabel")
         .attr("x", d => xScale(d.year))
-        .attr("y", (timelineHeight / 2) - 12)
+        .attr("y", (timelineHeight / 2) - 16)
         .attr("text-anchor", "middle")
         .attr("fill", "#333")
         .attr("font-size", 12)
         .text(d => d.label);
 
-      //
-      // TIMELINE END
-      //
+      // --- Add Artwork Markers to the Timeline ---
+      // For each artwork - a marker on the timeline. markers are positioned by the time period’s numeric year.
+      // If multiple artworks share same period vertically stack them with a slight offset
+      const artworkTimelineData = [];
+      for (const [period, artworks] of timePeriodMap) {
+        const year = parseYear(period);
+        artworks.forEach((artwork, index) => {
+          artworkTimelineData.push({
+            period,
+            year,
+            artwork,
+            index,
+            total: artworks.length
+          });
+        });
+      }
+
+      // For each artwork in timeline plot small circle 
+      timelineSvg.selectAll(".artworkTimelineMarker")
+        .data(artworkTimelineData)
+        .join("circle")
+        .attr("class", "artworkTimelineMarker")
+        // Horizontal position based on the year plus a slight jitter 
+        .attr("cx", d => xScale(d.year) + (d.index % 3) * 4)
+        // Vertical position: slightly below the axis + additional offset per artwork.
+        .attr("cy", d => (timelineHeight / 2) + 20 + (Math.floor(d.index / 3) * 8))
+        .attr("r", 4)
+        .attr("fill", "orange")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1)
+        .on("mouseover", function (event, d) {
+          d3.select(this).attr("r", 6);
+          tooltip.transition().duration(200).style("opacity", 1);
+          tooltip.html(`<strong>${d.artwork.label}</strong><br>Period: ${d.period}`)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", function (event, d) {
+          d3.select(this).attr("r", 4);
+          tooltip.transition().duration(200).style("opacity", 0);
+        })
+        .on("click", function (event, d) {
+          // TO ADD: Clicking an artwork marker could  highlight the artwork in the network graph.
+          console.log("Artwork clicked:", d.artwork.label);
+        });
+
+      timelineSvg.selectAll(".unknownArtworkMarker")
+        .data(artworkTimelineData.filter(d => d.year === 0))
+        .join("circle")
+        .attr("class", "unknownArtworkMarker")
+        .attr("cx", d => unknownX + (d.index % 3) * 4)
+        .attr("cy", d => (timelineHeight / 2) + 20 + (Math.floor(d.index / 3) * 8))
+        .attr("r", 4)
+        .attr("fill", "orange")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1);
 
 
 
@@ -733,73 +896,69 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+      // LEAFLET MAP INTEGRATION 
 
+      // Global variable to access markers in the filter too
+      let mapPoints = [];
 
-     // === LEAFLET MAP INTEGRATION ===
+      // Build mapPoints array from items with coordinates
+      items.forEach(item => {
+        const lat = item.edmPlaceLatitude?.[0];
+        const lon = item.edmPlaceLongitude?.[0];
+        if (lat && lon) {
+          mapPoints.push({
 
-// Global variable to access markers in the filter too
-let mapPoints = [];
+            lat: parseFloat(lat),
+            lon: parseFloat(lon),
+            title: getTitle(item),
+            creators: getCreatorLabels(item),
+            image: item.edmIsShownBy?.[0],
+            timePeriod: getTimePeriod(item)
+          });
 
-// Build mapPoints array from items with coordinates
-items.forEach(item => {
-  const lat = item.edmPlaceLatitude?.[0];
-  const lon = item.edmPlaceLongitude?.[0];
-  if (lat && lon) {
-    mapPoints.push({
+        }
+      });
 
-      lat: parseFloat(lat),
-      lon: parseFloat(lon),
-      title: getTitle(item),
-      creators: getCreatorLabels(item),
-      image: item.edmIsShownBy?.[0],
-      timePeriod: getTimePeriod(item)
-    });
+      // Create map
+      const map = L.map("map").setView([52.37, 4.89], 5); // Default to Amsterdam - change later to default based on centre of most artworks retreived from query
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors"
+      }).addTo(map);
 
-  }
-});
+      // Marker layer group
+      const markerLayer = L.layerGroup().addTo(map);
 
-// Create map
-const map = L.map("map").setView([52.37, 4.89], 5); // Default to Amsterdam - change later to default based on centre of most artworks retreived from query
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution: "&copy; OpenStreetMap contributors"
-}).addTo(map);
-
-// Marker layer group
-const markerLayer = L.layerGroup().addTo(map);
-
-// Helper to add markers
-function updateMapMarkers(points) {
-  markerLayer.clearLayers();
-  points.forEach(p => {
-    const popupContent = `
+      // Helper to add markers
+      function updateMapMarkers(points) {
+        markerLayer.clearLayers();
+        points.forEach(p => {
+          const popupContent = `
       <div style="max-width:200px">
         ${p.image ? `<img src="${p.image}" style="width:100%; margin-bottom: 5px;">` : ""}
         <strong>${p.title}</strong><br>
         <em>${p.creators.join(", ")}</em>
       </div>
     `;
-    L.marker([p.lat, p.lon]).addTo(markerLayer).bindPopup(popupContent);
-  });
+          L.marker([p.lat, p.lon]).addTo(markerLayer).bindPopup(popupContent);
+        });
 
-  if (points.length > 0) {
-    const bounds = points.map(p => [p.lat, p.lon]);
-    map.fitBounds(bounds, { padding: [20, 20] });
-  }
-}
+        if (points.length > 0) {
+          const bounds = points.map(p => [p.lat, p.lon]);
+          map.fitBounds(bounds, { padding: [20, 20] });
+        }
+      }
 
-// Initial display
-updateMapMarkers(mapPoints);
+      // Initial display
+      updateMapMarkers(mapPoints);
 
-// Hook into existing time period filter
-document.getElementById("applyFilters").addEventListener("click", () => {
-  const selectedTime = document.getElementById("institution").value;
-  const filteredPoints = (selectedTime === "all")
-    ? mapPoints
-    : mapPoints.filter(p => p.timePeriod === selectedTime);
-  updateMapMarkers(filteredPoints);
-});
-
-
+      // Hook into existing time period filter
+      document.getElementById("applyFilters").addEventListener("click", () => {
+        const selectedTime = document.getElementById("institution").value;
+        const filteredPoints = (selectedTime === "all")
+          ? mapPoints
+          : mapPoints.filter(p => p.timePeriod === selectedTime);
+        updateMapMarkers(filteredPoints);
+      });
 
 
 
@@ -809,7 +968,9 @@ document.getElementById("applyFilters").addEventListener("click", () => {
 
 
 
-//error 
+
+
+      //error 
 
 
 
