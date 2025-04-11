@@ -6,39 +6,50 @@
   <title>Network Visualisation Prototype</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
 
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 <body>
   <h1>Artefact Network <span class="fancy">Visualisation</span></h1>
+  <div id="gallery" style="display: flex; flex-wrap: wrap; gap: 12px; padding: 20px; max-width: 1200px; margin: auto;">
+    <!-- Thumbnails insetred dynamically -->
+  </div>
   <div class="container">
     <aside class="sidebar">
       <h2>Filter Options</h2>
+
       <div>
         <label for="artist">Filter by Artist:</label>
-        <!-- Using a text input for dynamic artist searching -->
         <input type="text" id="artist" placeholder="Enter artist name...">
       </div>
+      <div>
+        <label>Filter by Colour:</label>
+        <div id="color-options" style="margin-top: 8px;"></div>
+        <button id="applyColorFilter">Apply Colour Filter</button>
+      </div>
+      
       <div>
         <label for="institution">Filter by Time Period:</label>
         <select id="institution">
           <option value="all">All</option>
         </select>
       </div>
-      <div>
+
+
+
+      <div style="margin-top: 15px;">
         <button id="applyFilters">Apply Filters</button>
       </div>
     </aside>
-    <div id="graph"></div>
 
+    <div id="graph"></div>
   </div>
+
   <div id="timeline" style="width:900px; margin:20px auto;"></div>
   <div id="map" style="width: 100%; height: 500px; margin-top: 30px;"></div>
-
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="script.js"></script>

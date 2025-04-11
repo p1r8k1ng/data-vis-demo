@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Rembrandt Colour Filter</title>
+</head>
+<body>
+  <h1>Rembrandt Works by Color</h1>
+  <div id="color-filters"></div>
+  <div id="results"></div>
+
+  <script>
+    const API_KEY = 'teradowls';
+    const ARTIST = 'Rembrandt';
+    const PROVIDER = 'Rijksmuseum';
+
+    const facetURL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST)})&qf=DATA_PROVIDER:"${encodeURIComponent(PROVIDER)}"&media=true&rows=0&profile=facets&facet=COLOURPALETTE`;
+
+    // Fetch available colour facets
+    fetch(facetURL)
+      .then(res => res.json())
+      .then(data => {
+        const facet = data.facets?.find(f => f.name === "COLOURPALETTE");
+        if (!facet) return;
+
+        const container = document.getElementById("color-filters");
+
+        facet.fields.forEach(field => {
+          const color = field.label;
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = color;
+          checkbox.id = `color-${color}`;
+
+          const label = document.createElement("label");
+          label.htmlFor = checkbox.id;
+          label.innerText = `${color} (${field.count})`;
+          label.style.marginLeft = "8px";
+
+          const swatch = document.createElement("span");
+          swatch.style.backgroundColor = color;
+          swatch.style.display = "inline-block";
+          swatch.style.width = "16px";
+          swatch.style.height = "16px";
+          swatch.style.marginLeft = "10px";
+          swatch.style.border = "1px solid #000";
+
+          const br = document.createElement("br");
+
+          checkbox.addEventListener("change", () => {
+            loadFilteredArtworks();
+          });
+
+          container.appendChild(checkbox);
+          container.appendChild(label);
+          container.appendChild(swatch);
+          container.appendChild(br);
+        });
+      });
+
+    function loadFilteredArtworks() {
+      const selectedColors = Array.from(document.querySelectorAll('#color-filters input:checked'))
+        .map(cb => cb.value);
+
+      const colourParams = selectedColors.map(color => `colourpalette=${encodeURIComponent(color)}`).join('&');
+
+      const resultURL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST)})&qf=DATA_PROVIDER:"${encodeURIComponent(PROVIDER)}"&media=true&rows=20&${colourParams}`;
+
+      fetch(resultURL)
+        .then(res => res.json())
+        .then(data => {
+          const resultsDiv = document.getElementById("results");
+          resultsDiv.innerHTML = ""; // clear previous results
+
+          data.items.forEach(item => {
+            const thumb = item.edmPreview?.[0];
+            const title = item.title?.[0] || "Untitled";
+
+            const img = document.createElement("img");
+            img.src = thumb;
+            img.alt = title;
+            img.style.maxWidth = "150px";
+            img.style.margin = "5px";
+
+            resultsDiv.appendChild(img);
+          });
+        });
+    }
+  </script>
+</body>
+</html>
