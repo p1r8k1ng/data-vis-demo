@@ -1,20 +1,46 @@
-
-
-
-
-
-
 document.addEventListener("DOMContentLoaded", () => {
   const API_KEY = "teradowls";
-  const ARTIST_QUERY = "Vermeer";  // The artist to query
-  // other artist can be Rijn Van Rembrandt
-  //however Johannes Vermeer shows collaborators thus better for testing
-  const PROVIDER = "Rijksmuseum";           // Using Rijksmuseum as DATA_PROVIDER
+  const PROVIDER = "Rijksmuseum"; // Using Rijksmuseum as DATA_PROVIDER
 
+  //facet query to get a fuller list of artists
+  const ARTIST_FACET_URL = `https://api.europeana.eu/record/v2/search.json?query=*&wskey=${API_KEY}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=facets&facet=who&rows=0&f.who.facet.limit=100000`;
 
+  fetch(ARTIST_FACET_URL)
+    .then(res => res.json())
+    .then(data => {
+      // Look for facet that contains artist data
+      const artistFacet = data.facets?.find(f => f.name === "who");
+      if (artistFacet && artistFacet.fields && artistFacet.fields.length > 0) {
+        populateArtistDropdownFromFacet(artistFacet);
+      } else {
+        console.warn("Artist facet not found or contains no data.");
+      }
+    })
+    .catch(error => console.error("Error fetching artist facet data:", error));
 
-  const COLOR_FACET_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:"${encodeURIComponent(PROVIDER)}"&media=true&rows=0&profile=facets&facet=COLOURPALETTE`;
+  // populate artist dropdown with  facet data
+  function populateArtistDropdownFromFacet(facetData) {
+    const artistDropdown = document.getElementById("artist"); 
+    artistDropdown.innerHTML = ""; // Clear previous options
 
+    // Add a default "All Artists" option.
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "all";
+    defaultOption.textContent = "All Artists";
+    artistDropdown.appendChild(defaultOption);
+
+    // Iterate over  facet fields and add each as an option
+    facetData.fields.forEach(field => {
+      // field.label holds the artist name.
+      const option = document.createElement("option");
+      option.value = field.label;
+      option.textContent = field.label;
+      artistDropdown.appendChild(option);
+    });
+  }
+
+  // -------------------------------
+  const COLOR_FACET_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent("Vermeer")})&qf=DATA_PROVIDER:"${encodeURIComponent(PROVIDER)}"&media=true&rows=0&profile=facets&facet=COLOURPALETTE`;
   let availableColors = [];
 
   fetch(COLOR_FACET_URL)
@@ -22,12 +48,9 @@ document.addEventListener("DOMContentLoaded", () => {
     .then(data => {
       const facet = data.facets?.find(f => f.name === "COLOURPALETTE");
       if (!facet) return;
-
       availableColors = facet.fields.map(f => f.label);
-
       const colorContainer = document.getElementById("color-options");
       colorContainer.innerHTML = "";
-
       availableColors.forEach(color => {
         const wrapper = document.createElement("div");
         wrapper.style.display = "flex";
@@ -60,14 +83,13 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
+  // -------------------------------
+  // Main API URL for fetching artworks.
+  const API_URL = `https://api.europeana.eu/record/v2/search.json?query=*&wskey=${API_KEY}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
 
-
-
-
-  const API_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
-
-  // Helpers
-  function getTitle(item) { //extracting title of artwork
+  // -------------------------------
+  // Helper functions 
+  function getTitle(item) {
     if (item.title?.length > 0) return item.title[0];
     if (item.dcTitleLangAware?.def?.length > 0) {
       return item.dcTitleLangAware.def[0];
@@ -75,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return "Untitled";
   }
 
-  function getCreatorLabels(item) { //get name of creators of artwork
+  function getCreatorLabels(item) {
     if (item.edmAgentLabel?.length > 0) {
       const labels = item.edmAgentLabel
         .map(agent => agent.def)
@@ -85,42 +107,32 @@ document.addEventListener("DOMContentLoaded", () => {
     if (item.dcCreator?.length > 0) {
       return item.dcCreator;
     }
-    return ["Unknown Artist"]; //fallback
+    return ["Unknown Artist"]; // fallback
   }
 
-  function getTimePeriod(item) { //get time period
+  function getTimePeriod(item) {
     if (item.edmTimespanLabel?.length > 0) {
       return item.edmTimespanLabel[0].def || "Unknown Period";
     }
     return "Unknown Period";
   }
 
-
-
   function getMediaType(item) {
-    // If English array with content return the first element
     if (item.dcTypeLangAware?.en?.length > 0) {
-      return item.dcTypeLangAware.en[0]; // e.g. "painting"
+      return item.dcTypeLangAware.en[0];
     }
-    //fall back to "def"
     if (item.dcTypeLangAware?.def?.length > 0) {
-      return item.dcTypeLangAware.def[0]; // URL/ long text unfortunately
+      return item.dcTypeLangAware.def[0];
     }
-    //  If no info, default to "Artwork"
     return "Artwork";
   }
-
-
 
   function updateGallery(artworkNodes) {
     const galleryContainer = document.getElementById("gallery");
     if (!galleryContainer) return;
-
     galleryContainer.innerHTML = "";
-
     artworkNodes.forEach(d => {
       if (!d.image) return;
-
       const card = document.createElement("div");
       card.style.width = "140px";
       card.style.border = "1px solid #ddd";
@@ -150,29 +162,48 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-
-
-
-  document.getElementById("applyColorFilter").addEventListener("click", () => {
-    const selectedColors = Array.from(document.querySelectorAll("#color-options input:checked"))
-      .map(cb => cb.value);
-
-    if (selectedColors.length === 0) {
-      alert("Please select at least one color.");
-      return;
+  // -------------------------------
+  // Artist filter button handler
+  document.getElementById("applyArtistFilter").addEventListener("click", () => {
+    const selectedArtist = document.getElementById("artist").value;
+    let apiUrl;
+    if (selectedArtist === "all" || !selectedArtist) {
+      // wildcard query "*" when "all" is selected
+      apiUrl = `https://api.europeana.eu/record/v2/search.json?query=*&wskey=${API_KEY}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
+    } else {
+      // Filter by  selected artist.
+      apiUrl = `https://api.europeana.eu/record/v2/search.json?query=who:(${encodeURIComponent(selectedArtist)})&wskey=${API_KEY}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
     }
-
-    const colorParams = selectedColors
-      .map(c => `colourpalette=${encodeURIComponent(c)}`)
-      .join("&");
-
-    const filteredURL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent(ARTIST_QUERY)})&qf=DATA_PROVIDER:"${encodeURIComponent(PROVIDER)}"&media=true&rows=50&${colorParams}`;
-
-    console.log("Filtered API URL:", filteredURL); // 
-
-    fetchAndRenderArtworks(filteredURL);
+    fetchAndRenderArtworks(apiUrl);
   });
 
+  // Colour filter button handler
+ document.getElementById("applyColorFilter").addEventListener("click", () => {
+  const selectedColors = Array.from(document.querySelectorAll("#color-options input:checked"))
+    .map(cb => cb.value);
+
+  if (selectedColors.length === 0) {
+    alert("Please select at least one color.");
+    return;
+  }
+
+  const selectedArtist = document.getElementById("artist").value;
+  let queryParam = "*"; // default to all if no specific artist chosen
+
+  if (selectedArtist !== "all" && selectedArtist) {
+    // Filter by the selected artist using the 'who' field
+    queryParam = `who:(${encodeURIComponent(selectedArtist)})`;
+  }
+
+  const colorParams = selectedColors
+    .map(c => `colourpalette=${encodeURIComponent(c)}`)
+    .join("&");
+
+  // Build the URL with the dynamic query parameter
+  const filteredURL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=${queryParam}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&media=true&rows=50&${colorParams}`;
+  console.log("Filtered API URL:", filteredURL);
+  fetchAndRenderArtworks(filteredURL);
+});
 
 
   function fetchAndRenderArtworks(apiUrl) {
@@ -181,7 +212,8 @@ document.addEventListener("DOMContentLoaded", () => {
     fetch(apiUrl)
       .then(response => response.json())
       .then(data => {
-        const width = 900; //setting up dimensions 
+        
+        const width = 900;
         const height = 700;
 
         // Create main SVG and zoomable container.
@@ -839,7 +871,7 @@ document.addEventListener("DOMContentLoaded", () => {
           d.fy = null;
         }
 
-        // Draw Timeline Background with Grouping ---
+        // Draw Timeline Background with Grouping 
         //  create a separate timeline SVG that groups artworks by time period.
         const timelineWidth = 900;
         const timelineHeight = 150;
@@ -851,14 +883,14 @@ document.addEventListener("DOMContentLoaded", () => {
           .attr("width", timelineWidth)
           .attr("height", timelineHeight);
 
-        // Helper to extract a numeric year from a period label using a regex.
+        // Helper to extract a numeric year from a period label using a regex
         function parseYear(label) {
           const match = label.match(/\d{3,4}/);
           if (match) return +match[0];
           return 0;
         }
 
-        // Build timeline data from the unique time periods.
+        // Build timeline data from the unique time periods
         const timelineData = Array.from(timePeriodMap.entries())
           .filter(([_, artworks]) => artworks.length > 0)
           .map(([period, artworks]) => ({
@@ -920,7 +952,7 @@ document.addEventListener("DOMContentLoaded", () => {
           .attr("transform", `translate(0,${timelineHeight - timelineMargin.bottom})`)
           .call(xAxis);
 
-        // --- Add Time Period Markers ---
+        // Add Time Period Markers
         // Plot a circle for each unique time period.
         timelineSvg.selectAll(".timelineCircle")
           .data(timelineData)
