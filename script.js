@@ -413,7 +413,22 @@ document.addEventListener("DOMContentLoaded", () => {
           boundingBoxes.push({ period, rect, label });
         }
 
-        // Force simulation with columns
+        // Compute radial layout scales from timePeriodMap before simulation creation
+        const periodList = Array.from(timePeriodMap.keys());
+        function parseNumericYear(periodLabel) {
+          const match = periodLabel.match(/\d{3,4}/);
+          return match ? +match[0] : 0;
+        }
+        periodList.sort((a, b) => parseNumericYear(a) - parseNumericYear(b));
+        const angleScale = d3.scaleBand()
+          .domain(periodList)
+          .range([0, 2 * Math.PI])
+          .padding(0.1);
+        const radiusScale = d3.scaleLinear()
+          .domain([0, periodList.length - 1])
+          .range([100, 500]);
+
+        // Replace previous simulation force definitions with radial forces:
         let simulation = d3.forceSimulation(nodes)
           .force("link", d3.forceLink(links)
             .id(d => d.id)
@@ -425,20 +440,31 @@ document.addEventListener("DOMContentLoaded", () => {
             })
           )
           .force("charge", d3.forceManyBody().strength(-30))
-          .force("forceX", d3.forceX(d => {
-            switch (d.type) {
-              case "Provider": return 100;
-              case "Creator": return 300;
-              case "Artwork": return 550;
-              default: return 550;
-            }
-          }).strength(0.2))
-          .force("forceY", d3.forceY(height / 2).strength(0.1))
           .force("collide", d3.forceCollide().radius(d => {
             if (d.type === "Provider") return 30;
             if (d.type === "Creator") return 20;
             return 15; // Artwork
           }).iterations(2))
+          .force("x", d3.forceX(d => {
+            if (d.type === "Artwork") {
+              const i = periodList.indexOf(d.timePeriod);
+              if (i === -1) return width / 2;
+              const angle = angleScale(d.timePeriod);
+              const r = radiusScale(i);
+              return (width / 2) + r * Math.cos(angle);
+            }
+            return width / 2;
+          }).strength(1))
+          .force("y", d3.forceY(d => {
+            if (d.type === "Artwork") {
+              const i = periodList.indexOf(d.timePeriod);
+              if (i === -1) return height / 2;
+              const angle = angleScale(d.timePeriod);
+              const r = radiusScale(i);
+              return (height / 2) + r * Math.sin(angle);
+            }
+            return height / 2;
+          }).strength(1));
 
         // Link & node groups
         const linkGroup = container.append("g").attr("class", "links");
@@ -558,7 +584,8 @@ document.addEventListener("DOMContentLoaded", () => {
               .attr("y", minY)
               .attr("width", maxX - minX)
               .attr("height", maxY - minY);
-
+            
+              
             label
               .attr("x", minX + 5)
               .attr("y", minY + 15);
