@@ -1,273 +1,309 @@
 document.addEventListener("DOMContentLoaded", () => {
+  /***********************************************
+        API KEYS, PROVIDER, AND FACET SETUP
+   ***********************************************/
   const API_KEY = "teradowls";
-  const PROVIDER = "Rijksmuseum"; // Using Rijksmuseum as DATA_PROVIDER
-
-  //facet query to get a fuller list of artists
-  const ARTIST_FACET_URL = `https://api.europeana.eu/record/v2/search.json?query=*&wskey=${API_KEY}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=facets&facet=who&rows=0&f.who.facet.limit=100000`;
-
-  fetch(ARTIST_FACET_URL)
-    .then(res => res.json())
-    .then(data => {
-      // Look for facet that contains artist data
-      const artistFacet = data.facets?.find(f => f.name === "who");
-      if (artistFacet && artistFacet.fields && artistFacet.fields.length > 0) {
-        populateArtistDropdownFromFacet(artistFacet);
-      } else {
-        console.warn("Artist facet not found or contains no data.");
-      }
-    })
-    .catch(error => console.error("Error fetching artist facet data:", error));
-
-  // populate artist dropdown with  facet data
-  function populateArtistDropdownFromFacet(facetData) {
-    const artistDropdown = document.getElementById("artist"); 
-    artistDropdown.innerHTML = ""; // Clear previous options
-
-    // Add a default "All Artists" option.
-    const defaultOption = document.createElement("option");
-    defaultOption.value = "all";
-    defaultOption.textContent = "All Artists";
-    artistDropdown.appendChild(defaultOption);
-
-    // Iterate over  facet fields and add each as an option
-    facetData.fields.forEach(field => {
-      // field.label holds the artist name.
-      const option = document.createElement("option");
-      option.value = field.label;
-      option.textContent = field.label;
-      artistDropdown.appendChild(option);
-    });
-  }
-
-  // -------------------------------
-  const COLOR_FACET_URL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=who:(${encodeURIComponent("Vermeer")})&qf=DATA_PROVIDER:"${encodeURIComponent(PROVIDER)}"&media=true&rows=0&profile=facets&facet=COLOURPALETTE`;
-  let availableColors = [];
-
-  fetch(COLOR_FACET_URL)
-    .then(res => res.json())
-    .then(data => {
-      const facet = data.facets?.find(f => f.name === "COLOURPALETTE");
-      if (!facet) return;
-      availableColors = facet.fields.map(f => f.label);
-      const colorContainer = document.getElementById("color-options");
-      colorContainer.innerHTML = "";
-      availableColors.forEach(color => {
-        const wrapper = document.createElement("div");
-        wrapper.style.display = "flex";
-        wrapper.style.alignItems = "center";
-        wrapper.style.marginBottom = "5px";
-
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.value = color;
-        checkbox.id = `color-${color}`;
-
-        const label = document.createElement("label");
-        label.htmlFor = checkbox.id;
-        label.innerText = color;
-        label.style.marginLeft = "8px";
-        label.style.fontSize = "13px";
-
-        const swatch = document.createElement("span");
-        swatch.style.backgroundColor = color;
-        swatch.style.display = "inline-block";
-        swatch.style.width = "16px";
-        swatch.style.height = "16px";
-        swatch.style.border = "1px solid #000";
-        swatch.style.marginLeft = "8px";
-
-        wrapper.appendChild(checkbox);
-        wrapper.appendChild(label);
-        wrapper.appendChild(swatch);
-        colorContainer.appendChild(wrapper);
-      });
-    });
-
-  // -------------------------------
-  // Main API URL for fetching artworks.
+  const PROVIDER = "Rijksmuseum";
   const API_URL = `https://api.europeana.eu/record/v2/search.json?query=*&wskey=${API_KEY}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
+  const FACET_URL = `https://api.europeana.eu/record/v2/search.json?query=*&wskey=${API_KEY}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=facets&facet=who&rows=0&f.who.facet.limit=100000`;
 
-  // -------------------------------
-  // Helper functions 
-  function getTitle(item) {
-    if (item.title?.length > 0) return item.title[0];
-    if (item.dcTitleLangAware?.def?.length > 0) {
-      return item.dcTitleLangAware.def[0];
-    }
-    return "Untitled";
+  // Populate artist dropdown
+  fetch(FACET_URL)
+    .then(r => r.json())
+    .then(data => {
+      const facet = data.facets?.find(f => f.name === "who");
+      if (!facet) return;
+
+      // Grab the <select> up front
+      const sel = document.getElementById("artist");
+
+      // Populate options
+      sel.innerHTML = `<option value="all">All Artists</option>`;
+      facet.fields.forEach(f => {
+        const o = document.createElement("option");
+        o.value = f.label;
+        o.textContent = f.label;
+        sel.appendChild(o);
+      });
+
+      //  Listen for changes
+      sel.addEventListener("change", () => {
+        updateColorFacetsFor(sel.value);
+      });
+
+      // Fetch the initial colour facets
+      updateColorFacetsFor(sel.value);
+    })
+    .catch(console.error);
+
+
+  /***********************************************
+   * COLOUR FACET SETUP
+   ***********************************************/
+  function updateColorFacetsFor(artist) {
+    const whoQuery = artist === "all"
+      ? "*"
+      : `who:(${encodeURIComponent(artist)})`;
+
+    const url = [
+      "https://api.europeana.eu/record/v2/search.json",
+      `?wskey=${API_KEY}`,
+      `&query=${whoQuery}`,
+      `&qf=DATA_PROVIDER:("${encodeURIComponent(PROVIDER)}")`,
+      "&profile=facets",
+      "&media=true",
+      "&rows=0",
+      "&facet=COLOURPALETTE"
+    ].join("");
+
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        const facet = data.facets?.find(f => f.name === "COLOURPALETTE");
+        if (!facet) return;
+
+        // extract and sort the hexes
+        const hexes = facet.fields.map(f => f.label);
+        const sorted = sortColors(hexes);
+
+        // clear the container
+        const container = document.getElementById("color-options");
+        container.innerHTML = "";
+
+        // create a checkbox for each colour
+        sorted.forEach(color => {
+          const chip = document.createElement("label");
+          chip.className = "color-option";
+
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.value = color;
+
+          const sw = document.createElement("div");
+          sw.className = "swatch";
+          sw.style.background = color;
+
+          const hx = document.createElement("span");
+          hx.className = "hex";
+          hx.textContent = color;
+
+          chip.append(cb, sw, hx);
+          container.appendChild(chip);
+        });
+        // ─────────────────────────────────────────
+
+      })
+      .catch(console.error);
   }
 
-  function getCreatorLabels(item) {
-    if (item.edmAgentLabel?.length > 0) {
-      const labels = item.edmAgentLabel
-        .map(agent => agent.def)
-        .filter(name => name && name.trim() !== "");
-      if (labels.length > 0) return labels;
-    }
-    if (item.dcCreator?.length > 0) {
-      return item.dcCreator;
-    }
-    return ["Unknown Artist"]; // fallback
-  }
-
-  function getTimePeriod(item) {
-    if (item.edmTimespanLabel?.length > 0) {
-      return item.edmTimespanLabel[0].def || "Unknown Period";
-    }
-    return "Unknown Period";
-  }
-
-  function getMediaType(item) {
-    if (item.dcTypeLangAware?.en?.length > 0) {
-      return item.dcTypeLangAware.en[0];
-    }
-    if (item.dcTypeLangAware?.def?.length > 0) {
-      return item.dcTypeLangAware.def[0];
-    }
-    return "Artwork";
-  }
-
-  function updateGallery(artworkNodes) {
-    const galleryContainer = document.getElementById("gallery");
-    if (!galleryContainer) return;
-    galleryContainer.innerHTML = "";
-    artworkNodes.forEach(d => {
-      if (!d.image) return;
-      const card = document.createElement("div");
-      card.style.width = "140px";
-      card.style.border = "1px solid #ddd";
-      card.style.borderRadius = "8px";
-      card.style.overflow = "hidden";
-      card.style.boxShadow = "0 2px 6px rgba(0,0,0,0.1)";
-      card.style.background = "#fff";
-      card.style.margin = "5px";
-      card.style.fontFamily = "sans-serif";
-
-      const img = document.createElement("img");
-      img.src = d.image;
-      img.alt = d.label;
-      img.style.width = "100%";
-      img.style.height = "auto";
-      img.style.display = "block";
-
-      const caption = document.createElement("div");
-      caption.textContent = d.label;
-      caption.style.fontSize = "12px";
-      caption.style.padding = "6px 8px";
-      caption.style.textAlign = "center";
-
-      card.appendChild(img);
-      card.appendChild(caption);
-      galleryContainer.appendChild(card);
+  // Sort the hexes by hue, chroma, and lightness
+  function sortColors(colors) {
+    const hueVal = hex => {
+      const h = d3.hcl(hex).h;
+      return isNaN(h) ? Infinity : h;
+    };
+    return colors.slice().sort((a, b) => {
+      const ha = hueVal(a), hb = hueVal(b);
+      if (ha !== hb) return ha - hb;
+      const ca = d3.hcl(a).c, cb = d3.hcl(b).c;
+      if (ca !== cb) return cb - ca;
+      const la = d3.hcl(a).l, lb = d3.hcl(b).l;
+      return la - lb;
     });
   }
 
-  // -------------------------------
-  // Artist filter button handler
-  document.getElementById("applyArtistFilter").addEventListener("click", () => {
-    const selectedArtist = document.getElementById("artist").value;
-    let apiUrl;
-    if (selectedArtist === "all" || !selectedArtist) {
-      // wildcard query "*" when "all" is selected
-      apiUrl = `https://api.europeana.eu/record/v2/search.json?query=*&wskey=${API_KEY}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
-    } else {
-      // Filter by  selected artist.
-      apiUrl = `https://api.europeana.eu/record/v2/search.json?query=who:(${encodeURIComponent(selectedArtist)})&wskey=${API_KEY}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&profile=rich&media=true&rows=50&sort=score+desc`;
+
+
+
+
+  /***********************************************
+   * ARTIST FILTER HOOKS
+   ***********************************************/
+  document.getElementById("applyArtistFilter").onclick = () => {
+    const a = document.getElementById("artist").value;
+    const q = a === "all" ? "*" : `who:(${encodeURIComponent(a)})`;
+    fetchAndRenderArtworks(
+      `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=${q}&qf=DATA_PROVIDER:(%22${encodeURIComponent(
+        PROVIDER
+      )}%22)&profile=rich&media=true&rows=50&sort=score+desc`
+    );
+  };
+
+  document.getElementById("applyColorFilter").onclick = () => {
+    const selectedColors = Array.from(document.querySelectorAll('#color-options input[type=checkbox]:checked'))
+      .map(cb => cb.value);
+
+    if (selectedColors.length === 0) {
+      alert("Please select at least one colour.");
+      return;
     }
+
+    const artist = document.getElementById("artist").value;
+    const qArtist = artist === "all"
+      ? "*"
+      : `who:(${encodeURIComponent(artist)})`;
+
+    const colorParams = selectedColors
+      .map(c => `colourpalette=${encodeURIComponent(c)}`)
+      .join("&");
+
+    const apiUrl =
+      `https://api.europeana.eu/record/v2/search.json` +
+      `?wskey=${API_KEY}` +
+      `&query=${qArtist}` +
+      `&qf=DATA_PROVIDER:("${encodeURIComponent(PROVIDER)}")` +
+      `&media=true&rows=50&` +
+      colorParams;
+
     fetchAndRenderArtworks(apiUrl);
-  });
+  };
 
-  // Colour filter button handler
- document.getElementById("applyColorFilter").addEventListener("click", () => {
-  const selectedColors = Array.from(document.querySelectorAll("#color-options input:checked"))
-    .map(cb => cb.value);
 
-  if (selectedColors.length === 0) {
-    alert("Please select at least one color.");
-    return;
+
+  /***********************************************
+   * MAIN RENDER FUNCTION
+   ***********************************************/
+  let rawNodes, rawLinks;
+  let timePeriodMap = new Map();
+  const clusterLoadState = {};   // for tracking cluster expansion
+  /**
+   * Gradually expand large cluster in batches to keep responsive
+   */
+  function expandClusterBatched(clusterNode, curNodes, curLinks, batchSize = 10, delay = 500) {
+    const allArts = clusterNode.collapsedNodes.slice();
+    let loaded = 0;
+
+    function loadNext() {
+      // Remove the cluster node and its links
+      let nodesAcc = curNodes.filter(n => n.id !== clusterNode.id);
+      let linksAcc = curLinks.filter(
+        l => l.source !== clusterNode.id && l.target !== clusterNode.id
+      );
+
+      // Add every artwork up to the current loaded index
+      const slice = allArts.slice(0, loaded + batchSize);
+      slice.forEach(art => {
+        nodesAcc.push(art);
+        rawLinks
+          .filter(l => l.label === "created" && l.target === art.id)
+          .forEach(l => linksAcc.push({ ...l }));
+      });
+
+      // If there are more artworks remaining, re-insert exactly one placeholder
+      if (loaded + batchSize < allArts.length) {
+        nodesAcc.push(clusterNode);
+        rawLinks
+          .filter(l => l.target === clusterNode.id)
+          .forEach(l => linksAcc.push({ ...l }));
+      }
+
+      // increase batch counter
+      loaded += batchSize;
+
+      // Recompute timePeriodMap and redraw
+      timePeriodMap = new Map();
+      nodesAcc
+        .filter(n => n.type === "Artwork")
+        .forEach(art => {
+          (timePeriodMap.get(art.timePeriod) || timePeriodMap.set(art.timePeriod, [])).push(art);
+        });
+      drawTimeBoxes();
+      updateGraph(nodesAcc, linksAcc);
+
+      // if there are more artworks to load - set a timeout for the next batch
+      if (loaded < allArts.length) {
+        setTimeout(loadNext, delay);
+      }
+    }
+
+    // start the next batch
+    loadNext();
   }
 
-  const selectedArtist = document.getElementById("artist").value;
-  let queryParam = "*"; // default to all if no specific artist chosen
-
-  if (selectedArtist !== "all" && selectedArtist) {
-    // Filter by the selected artist using the 'who' field
-    queryParam = `who:(${encodeURIComponent(selectedArtist)})`;
-  }
-
-  const colorParams = selectedColors
-    .map(c => `colourpalette=${encodeURIComponent(c)}`)
-    .join("&");
-
-  // Build the URL with the dynamic query parameter
-  const filteredURL = `https://api.europeana.eu/record/v2/search.json?wskey=${API_KEY}&query=${queryParam}&qf=DATA_PROVIDER:(%22${encodeURIComponent(PROVIDER)}%22)&media=true&rows=50&${colorParams}`;
-  console.log("Filtered API URL:", filteredURL);
-  fetchAndRenderArtworks(filteredURL);
-});
 
 
   function fetchAndRenderArtworks(apiUrl) {
+    // Clear previous graph
     d3.select("#graph").selectAll("*").remove();
 
     fetch(apiUrl)
-      .then(response => response.json())
+      .then(r => r.json())
       .then(data => {
-        
-        const width = 900;
-        const height = 700;
+        const items = data.items || [];
+        const width = 900,
+          height = 700;
 
-        // Create main SVG and zoomable container.
-        const svg = d3.select("#graph")
+        // SVG + ZOOM 
+        const svg = d3
+          .select("#graph")
           .append("svg")
           .attr("width", width)
           .attr("height", height);
 
-        const container = svg.append("g"); // group element that holds everything is svg
+        //  group for zooming
+        const container = svg.append("g");
 
-        svg.call(d3.zoom()
-          .scaleExtent([0.1, 10]) //setting limits of the zooming
-          .on("zoom", event => {
-            container.attr("transform", event.transform); //applying zoom transforms
-          })
+        svg.call(
+          d3
+            .zoom()
+            .scaleExtent([0.1, 10])
+            .on("zoom", e => container.attr("transform", e.transform))
         );
 
 
+        let bbs = [], timeBG;
+        function drawTimeBoxes() {
+          // remove old boxes
+          container.select("g.timePeriodBackgrounds").remove();
+          bbs = [];
+          // insert fresh background group behind everything
+          timeBG = container.insert("g", ":first-child")
+            .attr("class", "timePeriodBackgrounds");
+          // for each period in map, append a <g> with rect+label
+          timePeriodMap.forEach((arts, period) => {
+            const g = timeBG.append("g").attr("class", "timePeriodBox");
+            const rect = g.append("rect")
+              .attr("fill", "rgba(200,200,255,0.15)")
+              .attr("stroke", "rgba(120,120,255,0.5)")
+              .attr("stroke-width", 1);
+            const label = g.append("text")
+              .attr("fill", "blue")
+              .attr("font-size", 14)
+              .attr("font-weight", "bold")
+              .text(period);
+            bbs.push({ period, rect, label });
+          });
+        }
 
-
-        // Tooltip display info when hovering
-        const tooltip = d3.select("body").append("div")
+        // ——— TOOLTIP ———
+        const tooltip = d3
+          .select("body")
+          .append("div")
           .attr("class", "tooltip")
           .style("opacity", 0)
           .style("position", "absolute")
-          .style("background-color", "white")
+          .style("background", "white")
           .style("border", "1px solid #ccc")
           .style("padding", "5px")
           .style("font-size", "12px")
-          .style("pointer-events", "none"); // prevent tooltip interfering with interactions
+          .style("pointer-events", "none");
 
-
-        //extracting artwork items from api
-        const items = data.items || [];
-
+        // ——— GALLERY ———
         updateGallery(
           items
-            .filter(item => item.edmIsShownBy?.length > 0)
-            .map(item => ({
-              label: getTitle(item),
-              image: item.edmIsShownBy[0]
-            }))
+            .filter(i => i.edmIsShownBy?.length)
+            .map(i => ({ label: getTitle(i), image: i.edmIsShownBy[0] }))
         );
 
-        const nodes = [];
-        const links = []; // list of links
-        const creatorsMap = {}; // map to store creators and prevent duplicates
-
-        // map to store artworks cateogorised by time period
-        const timePeriodMap = new Map();
-
-        // Provider node
+        // ——— BUILD RAW NODES & LINKS ———
+        let nodes = [],
+          links = [];
+        const creatorsMap = {};
+        timePeriodMap = new Map();
         let providerNode = null;
-        if (items.length > 0 && items[0].dataProvider?.length > 0) {
+
+        // Provider
+        if (items[0]?.dataProvider?.length) {
           providerNode = {
             id: `provider-${items[0].dataProvider[0]}`,
             label: items[0].dataProvider[0],
@@ -276,112 +312,397 @@ document.addEventListener("DOMContentLoaded", () => {
           nodes.push(providerNode);
         }
 
-        // --- Build Artwork and Creator nodes ---
+        // Artworks & Creators
         items.forEach(item => {
-          if (item.edmIsShownBy?.length > 0) {
-            const title = getTitle(item);
-            const timePeriod = getTimePeriod(item);
-            const mediaType = getMediaType(item);
+          if (!item.edmIsShownBy?.length) return;
+          const title = getTitle(item),
+            tp = getTimePeriod(item),
+            mt = getMediaType(item);
 
-            //creating artwork node
-            const artworkNode = {
-              id: item.id,
-              label: title,
-              type: "Artwork",
-              medium: getMediaType(item),
-              image: item.edmIsShownBy[0],
-              timePeriod
-            };
-            nodes.push(artworkNode);
+          // ARTWORK NODE
+          const art = {
+            id: item.id,
+            label: title,
+            type: "Artwork",
+            medium: mt,
+            image: item.edmIsShownBy[0],
+            timePeriod: tp
+          };
+          nodes.push(art);
+          (timePeriodMap.get(tp) || timePeriodMap.set(tp, []).get(tp)).push(art);
 
-            //grouping bounding box by time period
-            if (!timePeriodMap.has(timePeriod)) {
-              timePeriodMap.set(timePeriod, []);
+          // CREATORS + CREATED LINK
+          getCreatorLabels(item).forEach(lbl => {
+            const key = lbl.trim().toLowerCase();
+            if (!creatorsMap[key]) {
+              creatorsMap[key] = {
+                id: `creator-${key}`,
+                label: lbl,
+                type: "Creator"
+              };
+              nodes.push(creatorsMap[key]);
             }
-            timePeriodMap.get(timePeriod).push(artworkNode);
-
-            // handling crfeators and linking them to artworks
-            const creatorLabels = getCreatorLabels(item);
-            creatorLabels.forEach(creatorLabel => {
-              const creatorKey = creatorLabel.trim().toLowerCase();
-              if (!creatorsMap[creatorKey]) {
-                creatorsMap[creatorKey] = {
-                  id: `creator-${creatorKey}`,
-                  label: creatorLabel,
-                  type: "Creator"
-                };
-                nodes.push(creatorsMap[creatorKey]);
-              }
-              links.push({
-                source: creatorsMap[creatorKey].id,
-                target: artworkNode.id,
-                label: "created"
-              });
+            links.push({
+              source: creatorsMap[key].id,
+              target: art.id,
+              label: "created"
             });
+          });
 
-            // Collaboration links if multiple creators
-            if (creatorLabels.length > 1) {
-              for (let i = 0; i < creatorLabels.length; i++) {
-                for (let j = i + 1; j < creatorLabels.length; j++) {
-                  const key1 = creatorLabels[i].trim().toLowerCase();
-                  const key2 = creatorLabels[j].trim().toLowerCase();
-                  // Only add if not already present
-                  if (!links.some(l =>
-                    ((l.source === creatorsMap[key1].id && l.target === creatorsMap[key2].id) ||
-                      (l.source === creatorsMap[key2].id && l.target === creatorsMap[key1].id)) &&
-                    l.label === "collaborated with"
-                  )) {
-                    links.push({
-                      source: creatorsMap[key1].id,
-                      target: creatorsMap[key2].id,
-                      label: "collaborated with",
-                      collaborative: true
-                    });
-                  }
+          // COLLABORATIONS links
+          const cls = getCreatorLabels(item).map(l => l.trim().toLowerCase());
+          if (cls.length > 1) {
+            for (let i = 0; i < cls.length; i++) {
+              for (let j = i + 1; j < cls.length; j++) {
+                const a = creatorsMap[cls[i]].id,
+                  b = creatorsMap[cls[j]].id;
+                if (
+                  !links.some(
+                    l =>
+                      l.label === "collaborated with" &&
+                      ((l.source === a && l.target === b) ||
+                        (l.source === b && l.target === a))
+                  )
+                ) {
+                  links.push({
+                    source: a,
+                    target: b,
+                    label: "collaborated with",
+                    collaborative: true
+                  });
                 }
               }
             }
           }
         });
 
-        // Link each Creator to the Provider
-        Object.keys(creatorsMap).forEach(key => {
-          if (providerNode) {
+        // — Add provider links to creators
+        Object.values(creatorsMap).forEach(c => {
+          if (providerNode)
             links.push({
-              source: creatorsMap[key].id,
+              source: c.id,
               target: providerNode.id,
               label: "affiliated with"
             });
-          }
         });
+        rawNodes = nodes.slice();
+        rawLinks = links.slice();
+        drawTimeBoxes();
 
-        // Log for debugging
-        console.log("Nodes:", nodes);
-        console.log("Links:", links);
 
-        // Populate time period dropdown
+        // — Populate Time‑Period dropdown —
         const institutionSelect = document.getElementById("institution");
         if (institutionSelect) {
           institutionSelect.innerHTML = "";
-          const allOption = document.createElement("option");
-          allOption.value = "all";
-          allOption.textContent = "All";
-          institutionSelect.appendChild(allOption);
+          // “All” option
+          const allOpt = document.createElement("option");
+          allOpt.value = "all";
+          allOpt.textContent = "All";
+          institutionSelect.appendChild(allOpt);
+          // one option per period
+          Array.from(timePeriodMap.keys()).forEach(period => {
+            const opt = document.createElement("option");
+            opt.value = period;
+            opt.textContent = period;
+            institutionSelect.appendChild(opt);
+          });
+        } // — Filter the graph by time period —
 
-          // Insert each time period
-          for (const [period] of timePeriodMap) {
-            const option = document.createElement("option");
-            option.value = period;
-            option.textContent = period;
-            institutionSelect.appendChild(option);
+        // Initialise Choices.js on the populated <select>
+        new Choices(institutionSelect, {
+          searchEnabled: false,
+          shouldSort: false,
+          itemSelectText: '',
+        });
+
+        document.getElementById("applyFilters").addEventListener("click", () => {
+          const sel = institutionSelect.value;
+
+          // filter nodes and links
+          const keep = new Set();
+          const filteredNodes = [];
+          const filteredLinks = [];
+
+          // always keep provider
+          if (providerNode) {
+            keep.add(providerNode.id);
+            filteredNodes.push(providerNode);
           }
+
+          // keep artworks in this period
+          rawNodes.forEach(n => {
+            if (n.type === "Artwork" && (sel === "all" || n.timePeriod === sel)) {
+              keep.add(n.id);
+              filteredNodes.push(n);
+            }
+          });
+          updateGallery(
+            filteredNodes
+              .filter(n => n.type === "Artwork" && n.image)
+              .map(n => ({ label: n.label, image: n.image }))
+          );
+
+
+          // keep creators of kept artworks
+          rawLinks.forEach(l => {
+            const src = typeof l.source === 'object' ? l.source.id : l.source;
+            const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+            if (l.label === "created" && keep.has(tgt)) {
+              if (!keep.has(src)) {
+                keep.add(src);
+                filteredNodes.push(rawNodes.find(n => n.id === src));
+              }
+              filteredLinks.push({ source: src, target: tgt, label: "created" });
+            }
+          });
+
+          // any other links between kept nodes
+          rawLinks.forEach(l => {
+            const src = typeof l.source === 'object' ? l.source.id : l.source;
+            const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+            if (keep.has(src) && keep.has(tgt) && l.label !== "created") {
+              filteredLinks.push(Object.assign({}, l));
+            }
+          });
+
+          //  rebuild artwork patterns
+          container.select("defs").remove();
+          const defs = container.append("defs");
+          filteredNodes
+            .filter(d => d.type === "Artwork" && d.image)
+            .forEach(d => {
+              defs.append("pattern")
+                .attr("id", `pattern-${d.id}`)
+                .attr("width", 1)
+                .attr("height", 1)
+                .append("image")
+                .attr("xlink:href", d.image)
+                .attr("width", 20)
+                .attr("height", 20)
+                .attr("preserveAspectRatio", "xMidYMid slice");
+            });
+
+          //  rebuild bounding‐box groups
+          container.select("g.timePeriodBackgrounds").remove();
+          bbs.length = 0;
+          const periodMap = new Map();
+          filteredNodes
+            .filter(d => d.type === "Artwork")
+            .forEach(art => {
+              if (!periodMap.has(art.timePeriod)) periodMap.set(art.timePeriod, []);
+              periodMap.get(art.timePeriod).push(art);
+            });
+          timePeriodMap = periodMap;
+          drawTimeBoxes();
+          // Recompute the radial scales based on new periods
+          const periodList = Array.from(timePeriodMap.keys()).sort((a, b) => {
+            const ay = +(/\d{3,4}/.exec(a) || [0])[0],
+              by = +(/\d{3,4}/.exec(b) || [0])[0];
+            return ay - by;
+          });
+          angleScale.domain(periodList);
+
+          // update circle‐radius scale
+          const counts = periodList.map(p => timePeriodMap.get(p).length);
+          countScale.domain([0, d3.max(counts)]);
+
+          // update the graph
+          updateGraph(filteredNodes, filteredLinks);
+          timeBG.remove();      // nukes the old <g>
+          const newBG = container
+            .insert("g", ":first-child")
+            .attr("class", "timePeriodBackgrounds");
+
+          for (let [period, arts] of periodMap) {
+            const g = newBG.append("g").attr("class", "timePeriodBox");
+            const rect = g.append("rect")
+              .attr("fill", "rgba(200,200,255,0.15)")
+              .attr("stroke", "rgba(120,120,255,0.5)")
+              .attr("stroke-width", 1);
+            const label = g.append("text")
+              .attr("fill", "blue")
+              .attr("font-size", 14)
+              .attr("font-weight", "bold")
+              .text(period);
+            bbs.push({ period, rect, label });
+          }
+
+          // redraw graph
+          updateGraph(filteredNodes, filteredLinks);
+
+
+        });
+
+
+        // — GRAPH UPDATE FUNCTION —
+        function performHybridClustering(nodes, links) {
+          // Skipping time period clustering
+          return performCreatorClustering(nodes, links);
         }
 
-        // Artwork patterns
+        function performCreatorClustering(nodes, links) {
+          let nn = nodes.slice(),
+            nl = links.slice();
+          const cmap = {};
+
+          nl.forEach(l => {
+            if (l.label === "created") {
+              cmap[l.source] = cmap[l.source] || [];
+              const art = nn.find(n => n.id === l.target && n.type === "Artwork");
+              if (art) cmap[l.source].push(art);
+            }
+          });
+
+          // for each creator, if they have more than the threshold number of artworks create cluster
+          Object.entries(cmap).forEach(([cid, arts]) => {
+            if (arts.length > creatorThreshold) {
+              const clId = `cluster-creator-${cid.replace(/\W+/g, "_")}`;
+              const cn = {
+                id: clId,
+                label: `${arts.length} works by ${cid}`,
+                type: "CreatorCluster",
+                creatorId: cid,
+                collapsedNodes: arts
+              };
+              nn = nn.filter(n => !arts.some(a => a.id === n.id));
+              nl = nl.filter(
+                l => !(l.label === "created" && arts.some(a => a.id === l.target))
+              );
+              nl.push({ source: cid, target: clId, label: "created" });
+              nn.push(cn);
+            }
+          });
+          return { nodes: nn, links: nl };
+        }
+
+        // ——— HYBRID CLUSTERING ———
+        const periodThreshold = 10,
+          creatorThreshold = 5;
+
+        function performTimeClustering(nodes, links) {
+          let nn = nodes.slice(),
+            nl = links.slice();
+          for (let [period, arts] of timePeriodMap) {
+            if (arts.length > periodThreshold) {
+              const cid = `cluster-period-${period.replace(/\W+/g, "_")}`;
+              const cn = {
+                id: cid,
+                label: `${arts.length} works in ${period}`,
+                type: "TimePeriodCluster",
+                timePeriod: period,
+                collapsedNodes: arts
+              };
+              nn = nn.filter(n => !arts.some(a => a.id === n.id));
+              nl = nl.filter(
+                l => !(l.label === "created" && arts.some(a => a.id === l.target))
+              );
+              if (providerNode)
+                nl.push({
+                  source: providerNode.id,
+                  target: cid,
+                  label: "grouped by time"
+                });
+              nn.push(cn);
+            }
+          }
+          return { nodes: nn, links: nl };
+        }
+
+        function performCreatorClustering(nodes, links) {
+          let nn = nodes.slice(),
+            nl = links.slice();
+          const cmap = {};
+          nl.forEach(l => {
+            if (l.label === "created") {
+              cmap[l.source] = cmap[l.source] || [];
+              const art = nn.find(n => n.id === l.target && n.type === "Artwork");
+              if (art) cmap[l.source].push(art);
+            }
+          });
+          Object.entries(cmap).forEach(([cid, arts]) => {
+            if (arts.length > creatorThreshold) {
+              const clId = `cluster-creator-${cid.replace(/\W+/g, "_")}`;
+              const cn = {
+                id: clId,
+                label: `${arts.length} works by ${cid}`,
+                type: "CreatorCluster",
+                creatorId: cid,
+                collapsedNodes: arts
+              };
+              nn = nn.filter(n => !arts.some(a => a.id === n.id));
+              nl = nl.filter(
+                l => !(l.label === "created" && arts.some(a => a.id === l.target))
+              );
+              nl.push({ source: cid, target: clId, label: "created" });
+              nn.push(cn);
+            }
+          });
+          return { nodes: nn, links: nl };
+        }
+
+        function performHybridClustering(nodes, links) {
+          const t = performTimeClustering(nodes, links);
+          return performCreatorClustering(t.nodes, t.links);
+        }
+
+        function expandCluster(clusterNode, curNodes, curLinks) {
+          let nn = curNodes.filter(n => n.id !== clusterNode.id),
+            nl = curLinks.filter(l => l.target !== clusterNode.id);
+
+          clusterNode.collapsedNodes.forEach(art => {
+            nn.push(art);
+            if (art.image) {
+              // rebuild the pattern for the artwork
+              defs.append("pattern")
+                .attr("id", "pattern-" + art.id)
+                .attr("width", 1)
+                .attr("height", 1)
+                .append("image")
+                .attr("xlink:href", art.image)
+                .attr("width", 20)
+                .attr("height", 20)
+                .attr("preserveAspectRatio", "xMidYMid slice");
+            }
+
+
+            if (clusterNode.type === "CreatorCluster") {
+              nl.push({
+                source: clusterNode.creatorId,
+                target: art.id,
+                label: "created"
+              });
+            } else {
+              // restore all original created-by links from rawLinks
+              rawLinks
+                .filter(l => l.label === "created" && l.target === art.id)
+                .forEach(l => nl.push({ ...l }));
+            }
+          });
+
+          // pre-scatter the expanded nodes on a circle around the cluster center
+          const cx = clusterNode.x, cy = clusterNode.y, R = 80;
+          // only affect new ones
+          clusterNode.collapsedNodes.forEach((art, i, arr) => {
+            const θ = (2 * Math.PI) * (i / arr.length);
+            const n = nn.find(d => d.id === art.id);
+            n.x = cx + Math.cos(θ) * R;
+            n.y = cy + Math.sin(θ) * R;
+            n.vx = n.vy = 0;
+          });
+
+          // return rebuilt arrays
+          return { nodes: nn, links: nl };
+        }
+
+
+        ({ nodes, links } = performHybridClustering(nodes, links));
+
+        // ——— PATTERNS FOR ARTWORK IMAGES ———
         const defs = container.append("defs");
         nodes.forEach(d => {
           if (d.type === "Artwork" && d.image) {
-            defs.append("pattern")
+            defs
+              .append("pattern")
               .attr("id", "pattern-" + d.id)
               .attr("width", 1)
               .attr("height", 1)
@@ -393,554 +714,415 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         });
 
-        //  group to hold  bounding boxes and labels behind everything
-        const timePeriodBackgroundGroup = container.insert("g", ":first-child").attr("class", "timePeriodBackgrounds");
-        //store objects { rect, label, period } update  each tick
-        const boundingBoxes = [];
-
-        for (const [period] of timePeriodMap) {
-          const g = timePeriodBackgroundGroup.append("g").attr("class", "timePeriodBox");
-          const rect = g.append("rect")
-            .attr("fill", "rgba(200,200,255,0.15)")
-            .attr("stroke", "rgba(120,120,255,0.5)")
-            .attr("stroke-width", 1);
-          const label = g.append("text")
-            .attr("fill", "blue")
-            .attr("font-size", 14)
-            .attr("font-weight", "bold")
-            .text(period);
-
-          boundingBoxes.push({ period, rect, label });
-        }
-
-        // Compute radial layout scales from timePeriodMap before simulation creation
-        const periodList = Array.from(timePeriodMap.keys());
-        function parseNumericYear(periodLabel) {
-          const match = periodLabel.match(/\d{3,4}/);
-          return match ? +match[0] : 0;
-        }
-        periodList.sort((a, b) => parseNumericYear(a) - parseNumericYear(b));
-        const angleScale = d3.scaleBand()
+        // ——— RADIAL SCALES ———
+        const periodList = Array.from(timePeriodMap.keys()).sort((a, b) => {
+          const ay = +(/\d{3,4}/.exec(a) || [0])[0],
+            by = +(/\d{3,4}/.exec(b) || [0])[0];
+          return ay - by;
+        });
+        const angleScale = d3
+          .scaleBand()
           .domain(periodList)
           .range([0, 2 * Math.PI])
           .padding(0.1);
-        const radiusScale = d3.scaleLinear()
-          .domain([0, periodList.length - 1])
-          .range([100, 500]);
+        const counts = periodList.map(p => timePeriodMap.get(p).length);
+        const maxCount = d3.max(counts);
+        const countScale = d3
+          .scaleSqrt()            // sqrt for diminishing returns
+          .domain([0, maxCount])
+          .range([100, 500]);     //  max radius of circle
 
-        // Replace previous simulation force definitions with radial forces:
-        let simulation = d3.forceSimulation(nodes)
-          .force("link", d3.forceLink(links)
-            .id(d => d.id)
-            .distance(link => {
-              if (link.label === "affiliated with") return 250;
-              if (link.label === "created") return 100;
-              if (link.collaborative) return 80;
-              return 150;
-            })
+        // ——— FORCE SIMULATION ———
+        const simulation = d3
+          .forceSimulation(nodes)
+          .velocityDecay(0.4)                                   // more friction
+          .force("charge", d3.forceManyBody()
+            .strength(-20)                                      // weaker repulsion
+            .theta(0.9)                                         // faster BH calc
+            .distanceMax(400)
+          )
+          .force("collide", d3.forceCollide()
+            .radius(d => + 2)
+            .strength(0.2)                                      // softer separation
+            .iterations(1)
+          )
+          .force(
+            "link",
+            d3
+              .forceLink(links)
+              .id(d => d.id)
+              .distance(l => {
+                if (l.label === "affiliated with") return 250;
+                if (l.label === "created") return 100;
+                if (l.label === "grouped by time") return 150;
+                if (l.collaborative) return 80;
+                return 150;
+              })
           )
           .force("charge", d3.forceManyBody().strength(-30))
-          .force("collide", d3.forceCollide().radius(d => {
-            if (d.type === "Provider") return 30;
-            if (d.type === "Creator") return 20;
-            return 15; // Artwork
-          }).iterations(2))
-          .force("x", d3.forceX(d => {
-            if (d.type === "Artwork") {
-              const i = periodList.indexOf(d.timePeriod);
-              if (i === -1) return width / 2;
-              const angle = angleScale(d.timePeriod);
-              const r = radiusScale(i);
-              return (width / 2) + r * Math.cos(angle);
-            }
-            return width / 2;
-          }).strength(1))
-          .force("y", d3.forceY(d => {
-            if (d.type === "Artwork") {
-              const i = periodList.indexOf(d.timePeriod);
-              if (i === -1) return height / 2;
-              const angle = angleScale(d.timePeriod);
-              const r = radiusScale(i);
-              return (height / 2) + r * Math.sin(angle);
-            }
-            return height / 2;
-          }).strength(1));
+          .force(
+            "collide",
+            d3
+              .forceCollide()
+              .radius(d => {
+                if (d.type === "Provider") return 30;
+                if (d.type === "Creator") return 20;
+                if (
+                  d.type === "TimePeriodCluster" ||
+                  d.type === "CreatorCluster"
+                )
+                  return clusterRadius(d) + 4;
+                return 15;
+              })
+              .iterations(2)
+          )
+          .force(
+            "x",
+            d3.forceX(d => {
+              if (d.type === "Artwork") {
+                const ang = angleScale(d.timePeriod),
+                  r = countScale(timePeriodMap.get(d.timePeriod).length);
+                return width / 2 + r * Math.cos(ang);
+              }
+              return width / 2;
+            }).strength(1)
+          )
+          .force(
+            "y",
+            d3.forceY(d => {
+              if (d.type === "Artwork") {
+                const ang = angleScale(d.timePeriod),
+                  r = countScale(timePeriodMap.get(d.timePeriod).length);
+                return height / 2 + r * Math.sin(ang);
+              }
+              return height / 2;
+            }).strength(1)
+          )
 
-        // Link & node groups
+        // ——— LINK & NODE GROUPS ———
         const linkGroup = container.append("g").attr("class", "links");
         const nodeGroup = container.append("g").attr("class", "nodes");
 
-        let linkSel = linkGroup.selectAll("line")
+        let linkSel = linkGroup
+          .selectAll("line")
           .data(links)
           .join("line")
+          .attr("fill", "none")
           .attr("stroke", d => d.collaborative ? "red" : "#aaa")
-          .attr("stroke-opacity", 0.8)
-          .attr("stroke-width", 2);
+          .attr("stroke-opacity", 0.6)
+          .attr("stroke-width", 1.5);
 
-        let nodeSel = nodeGroup.selectAll("circle")
+        let nodeSel = nodeGroup
+          .selectAll("circle")
           .data(nodes)
           .join("circle")
           .attr("r", d => {
             if (d.type === "Provider") return 20;
             if (d.type === "Creator") return 10;
+            if (
+              d.type === "TimePeriodCluster" ||
+              d.type === "CreatorCluster"
+            )
+              return 20;
             return 12;
           })
           .attr("fill", d => {
-            if (d.type === "Artwork" && d.image) {
+            if (d.type === "Artwork" && d.image)
               return `url(#pattern-${d.id})`;
-            } else if (d.type === "Provider") {
-              return "gold";
-            } else if (d.type === "Creator") {
-              return "darkgreen";
-            }
+            if (d.type === "Provider") return "gold";
+            if (d.type === "Creator") return "darkgreen";
+            if (d.type === "CreatorCluster") return "purple";
+            if (d.type === "TimePeriodCluster") return "orange";
             return "steelblue";
           })
           .attr("stroke", d => {
             if (d.type === "Artwork") return "steelblue";
             if (d.type === "Provider") return "gold";
             if (d.type === "Creator") return "darkgreen";
+            if (d.type === "CreatorCluster") return "purple";
+            if (d.type === "TimePeriodCluster") return "orange";
             return "#fff";
           })
           .attr("stroke-width", 2)
-          .call(d3.drag()
-            .on("start", dragStarted)
-            .on("drag", dragged)
-            .on("end", dragEnded)
+          .on("mouseover", (e, d) => {
+            d3.select(e.currentTarget)
+              .transition()
+              .duration(200)
+              .attr("r", () => +d3.select(e.currentTarget).attr("r") * 1.5);
+            let html = `<strong>${d.label}</strong><br>Type: ${d.type}`;
+            if (d.type === "Artwork" && d.image)
+              html =
+                `<img src="${d.image}" width="150" style="display:block;margin-bottom:5px;">` +
+                html;
+            tooltip
+              .html(html)
+              .style("opacity", 1)
+              .style("left", e.pageX + 10 + "px")
+              .style("top", e.pageY + 10 + "px");
+          })
+          .on("mouseout", (e, d) => {
+            d3.select(e.currentTarget)
+              .transition()
+              .duration(200)
+              .attr("r", d => {
+                if (d.type === "Provider") return 20;
+                if (d.type === "Creator") return 10;
+                if (
+                  d.type === "TimePeriodCluster" ||
+                  d.type === "CreatorCluster"
+                )
+                  return clusterRadius(d);
+                return 12;
+              });
+            tooltip.style("opacity", 0);
+          }).on("click", (e, d) => {
+            if (d.type === "TimePeriodCluster" || d.type === "CreatorCluster") {
+              expandClusterBatched(d, nodes, links);
+            }
+          })
+
+          .call(
+            d3
+              .drag()
+              .on("start", dragStarted)
+              .on("drag", dragged)
+              .on("end", dragEnded)
           );
 
-        // Tooltip
-        nodeSel.on("mouseover", (event, d) => {
-          d3.select(event.currentTarget)
-            .transition()
-            .duration(200)
-            .attr("r", () => {
-              if (d.type === "Provider") return 20 * 1.5;
-              if (d.type === "Creator") return 10 * 1.5;
-              return 12 * 1.5;
-            });
-          let tooltipContent = `<strong>${d.label}</strong><br>
-            Type: ${d.type} <br>
-            Medium: ${d.medium}`;
-          if (d.type === "Artwork" && d.image) {
-            tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
-          }
-          tooltip.transition().duration(200).style("opacity", 1);
-          tooltip.html(tooltipContent)
-            .style("left", (event.pageX + 10) + "px")
-            .style("top", (event.pageY + 10) + "px");
-        }).on("mouseout", (event, d) => {
-          d3.select(event.currentTarget)
-            .transition()
-            .duration(200)
-            .attr("r", () => {
-              if (d.type === "Provider") return 20;
-              if (d.type === "Creator") return 10;
-              return 12;
-            });
-          tooltip.transition().duration(200).style("opacity", 0);
-        });
-
-        // On each tick, update node positions and bounding boxes
+        // ——— TICK HANDLER ———
         simulation.on("tick", () => {
           linkSel
             .attr("x1", d => d.source.x)
             .attr("y1", d => d.source.y)
             .attr("x2", d => d.target.x)
             .attr("y2", d => d.target.y);
+          nodeSel.attr("cx", d => d.x).attr("cy", d => d.y);
 
-          nodeSel
-            .attr("cx", d => d.x)
-            .attr("cy", d => d.y);
 
-          // Update bounding boxes for each time period
-          boundingBoxes.forEach(({ period, rect, label }) => {
-            const artworks = timePeriodMap.get(period) || [];
-            if (!artworks.length) return;
-
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            artworks.forEach(artNode => {
-              // find the actual node in 'nodes'
-              const node = nodes.find(n => n.id === artNode.id);
-              if (node) {
-                if (node.x < minX) minX = node.x;
-                if (node.x > maxX) maxX = node.x;
-                if (node.y < minY) minY = node.y;
-                if (node.y > maxY) maxY = node.y;
-              }
+          // update bounding boxes
+          bbs.forEach(({ period, rect, label }) => {
+            const arts = timePeriodMap.get(period) || [];
+            if (!arts.length) return;
+            let minX = Infinity,
+              minY = Infinity,
+              maxX = -Infinity,
+              maxY = -Infinity;
+            arts.forEach(a => {
+              const n = nodes.find(n => n.id === a.id);
+              if (!n) return;
+              minX = Math.min(minX, n.x);
+              maxX = Math.max(maxX, n.x);
+              minY = Math.min(minY, n.y);
+              maxY = Math.max(maxY, n.y);
             });
-
-            if (minX === Infinity) return; // no valid positions
-
-            // Add padding
+            if (minX === Infinity) return;
             const pad = 20;
-            minX -= pad; minY -= pad;
-            maxX += pad; maxY += pad;
-
-
-
-
             rect
-              .attr("x", minX)
-              .attr("y", minY)
-              .attr("width", maxX - minX)
-              .attr("height", maxY - minY);
-            
-              
-            label
-              .attr("x", minX + 5)
-              .attr("y", minY + 15);
+              .attr("x", minX - pad)
+              .attr("y", minY - pad)
+              .attr("width", maxX - minX + pad * 2)
+              .attr("height", maxY - minY + pad * 2);
+            label.attr("x", minX + 5).attr("y", minY + 15);
           });
         });
 
-        // Filter: Time Period only
-        document.getElementById("applyFilters").addEventListener("click", () => {
-          const selectedTime = institutionSelect.value;
-          console.log("Selected time for filter:", selectedTime);
+        function updateGraph(updatedNodes, updatedLinks) {
+          nodes = updatedNodes;
+          links = updatedLinks;
+          // clear & rebuild boxes for whatever's in timePeriodMap
+          container.select("g.timePeriodBackgrounds").remove();
+          bbs = [];
+          drawTimeBoxes();
+          //  RESTART simulation
+          simulation.nodes(updatedNodes);
+          simulation.force("link").links(updatedLinks);
 
-          const filteredNodes = [];
-          const filteredLinks = [];
-          const filteredNodeIds = new Set();
-
-          // Always keep provider
-          if (providerNode) {
-            filteredNodes.push(providerNode);
-            filteredNodeIds.add(providerNode.id);
-          }
-
-          // Artwork filter
-          const filteredArtworks = (selectedTime === "all")
-            ? nodes.filter(n => n.type === "Artwork")
-            : nodes.filter(n => n.type === "Artwork" && n.timePeriod === selectedTime);
-
-          filteredArtworks.forEach(a => {
-            filteredNodes.push(a);
-            filteredNodeIds.add(a.id);
-          });
-          const filteredArtworksForGallery = filteredNodes.filter(n => n.type === "Artwork");
-          updateGallery(filteredArtworksForGallery);
-
-          // Include creators of these artworks
-          links.forEach(l => {
-            if (l.label === "created") {
-              const tId = (typeof l.target === "object") ? l.target.id : l.target;
-              if (filteredNodeIds.has(tId)) {
-                const sId = (typeof l.source === "object") ? l.source.id : l.source;
-                if (!filteredNodeIds.has(sId)) {
-                  const cNode = nodes.find(n => n.id === sId);
-                  if (cNode) {
-                    filteredNodes.push(cNode);
-                    filteredNodeIds.add(cNode.id);
-                  }
-                }
-              }
-            }
-          });
-
-          // Rebuild links
-          links.forEach(l => {
-            const sId = (typeof l.source === "object") ? l.source.id : l.source;
-            const tId = (typeof l.target === "object") ? l.target.id : l.target;
-            if (filteredNodeIds.has(sId) && filteredNodeIds.has(tId)) {
-              filteredLinks.push(l);
-            }
-          });
-
-          // Clear
-          container.selectAll("*").remove();
-
-          // Recreate Artwork patterns
-          const newDefs = container.append("defs");
-          filteredNodes.forEach(d => {
-            if (d.type === "Artwork" && d.image) {
-              newDefs.append("pattern")
-                .attr("id", `pattern-${d.id}`)
-                .attr("width", 1)
-                .attr("height", 1)
-                .append("image")
-                .attr("xlink:href", d.image)
-                .attr("width", 20)
-                .attr("height", 20)
-                .attr("preserveAspectRatio", "xMidYMid slice");
-            }
-          });
-
-          // Build new timePeriodMap for bounding boxes in the filtered set
-          const newTimePeriodMap = new Map();
-          filteredNodes.forEach(n => {
-            if (n.type === "Artwork") {
-              if (!newTimePeriodMap.has(n.timePeriod)) {
-                newTimePeriodMap.set(n.timePeriod, []);
-              }
-              newTimePeriodMap.get(n.timePeriod).push(n);
-            }
-          });
-
-
-          // Build an array of the time periods
-          // Gather time periods
-          const periodList = Array.from(timePeriodMap.keys());
-
-          // Sort them by numeric year 
-          function parseNumericYear(periodLabel) {
-            const match = periodLabel.match(/\d{3,4}/);
-            if (match) return +match[0];
-            return 0; // fallback
-          }
-          periodList.sort((a, b) => parseNumericYear(a) - parseNumericYear(b));
-
-          //Define angle scale
-          const angleScale = d3.scaleBand()
-            .domain(periodList)         // the sorted list of time periods
-            .range([0, 2 * Math.PI])    // full circle
-            .padding(0.1);              // optional spacing
-
-          // For radius, spread  from 100..500 in increasing steps:
-          const radiusScale = d3.scaleLinear()
-            .domain([0, periodList.length - 1])
-            .range([100, 500]);
-
-          // Create bounding boxes for the filtered set
-          const newTimePeriodBackgroundGroup = container.insert("g", ":first-child").attr("class", "timePeriodBackgrounds");
-          const newBoundingBoxes = [];
-
-          for (const [period] of newTimePeriodMap) {
-            const g = newTimePeriodBackgroundGroup.append("g").attr("class", "timePeriodBox");
-            const rect = g.append("rect")
-              .attr("fill", "rgba(200,200,255,0.15)")
-              .attr("stroke", "rgba(120,120,255,0.5)")
-              .attr("stroke-width", 1);
-            const label = g.append("text")
-              .attr("fill", "blue")
-              .attr("font-size", 14)
-              .attr("font-weight", "bold")
-              .text(period);
-            newBoundingBoxes.push({ period, rect, label });
-          }
-
-          // Link & Node groups
-          const newLinkGroup = container.append("g").attr("class", "links");
-          const newNodeGroup = container.append("g").attr("class", "nodes");
-
-          // Force simulation again
-          simulation = d3.forceSimulation(filteredNodes)
-            .force("link", d3.forceLink(filteredLinks)
-              .id(d => d.id)
-              .distance(link => {
-                if (link.label === "affiliated with") return 250;
-                if (link.label === "created") return 200;
-                if (link.collaborative) return 80;
-                return 150;
-              })
-            )
-            .force("charge", d3.forceManyBody().strength(-30))
-            .force("collide", d3.forceCollide().radius(d => {
-              // up to you
-              if (d.type === "Creator") return 20;
-              return 15;
-            }).iterations(2))
-            //  position Artwork by angle, radius
-            .force("x", d3.forceX(d => {
-              if (d.type === "Artwork") {
-                const i = periodList.indexOf(d.timePeriod);
-                if (i === -1) {
-                  // if it's unknown or not in the list
-                  return width / 2;
-                }
-                // Get angle and radius
-                const angle = angleScale(d.timePeriod);
-                const r = radiusScale(i);
-                return (width / 2) + r * Math.cos(angle);
-              }
-              // Creator/Provider => center
-              return width / 2;
-            }).strength(1))
-            .force("y", d3.forceY(d => {
-              if (d.type === "Artwork") {
-                const i = periodList.indexOf(d.timePeriod);
-                if (i === -1) {
-                  return height / 2;
-                }
-                const angle = angleScale(d.timePeriod);
-                const r = radiusScale(i);
-                return (height / 2) + r * Math.sin(angle);
-              }
-              // Creator/Provider => center
-              return height / 2;
-            }).strength(1));
-
-          const newLinkSel = newLinkGroup.selectAll("line")
-            .data(filteredLinks)
-            .join("line")
-            .attr("stroke", d => d.collaborative ? "red" : "#aaa")
+          // REBUILD links
+          linkSel = linkGroup.selectAll("line").data(updatedLinks, d => d.source.id + "-" + d.target.id);
+          linkSel.exit().remove();
+          linkSel = linkSel.enter().append("line")
             .attr("stroke-opacity", 0.8)
-            .attr("stroke-width", 2);
+            .attr("stroke-width", 2)
+            .merge(linkSel)
+            .attr("stroke", d => (d.collaborative ? "red" : "#aaa"));
 
-          const newNodeSel = newNodeGroup.selectAll("circle")
-            .data(filteredNodes)
-            .join("circle")
+          // REBUILD nodes
+          nodeSel = nodeGroup.selectAll("circle").data(updatedNodes, d => d.id);
+          nodeSel.exit().remove();
+          const nodeEnter = nodeSel.enter().append("circle");
+
+          // MERGE enter + update
+          nodeSel = nodeEnter.merge(nodeSel)
             .attr("r", d => {
               if (d.type === "Provider") return 20;
               if (d.type === "Creator") return 10;
+              if (d.type === "TimePeriodCluster" || d.type === "CreatorCluster")
+                return clusterRadius(d);
               return 12;
             })
             .attr("fill", d => {
-              if (d.type === "Artwork" && d.image) {
+              if (d.type === "Artwork" && d.image)
                 return `url(#pattern-${d.id})`;
-              } else if (d.type === "Provider") {
-                return "gold";
-              } else if (d.type === "Creator") {
-                return "darkgreen";
-              }
+              if (d.type === "Provider") return "gold";
+              if (d.type === "Creator") return "darkgreen";
+              if (d.type === "CreatorCluster") return "purple";
+              if (d.type === "TimePeriodCluster") return "orange";
               return "steelblue";
             })
+            .attr("fill-opacity", d =>
+              (d.type === "TimePeriodCluster" || d.type === "CreatorCluster") ? 0.7 : 1
+            )
+
             .attr("stroke", d => {
               if (d.type === "Artwork") return "steelblue";
               if (d.type === "Provider") return "gold";
               if (d.type === "Creator") return "darkgreen";
+              if (d.type === "CreatorCluster") return "purple";
+              if (d.type === "TimePeriodCluster") return "orange";
               return "#fff";
             })
             .attr("stroke-width", 2)
+            .on("mouseover", (e, d) => {
+              d3.select(e.currentTarget).transition().duration(200)
+                .attr("r", +d3.select(e.currentTarget).attr("r") * 1.5);
+              let html = `<strong>${d.label}</strong><br>Type: ${d.type}`;
+              if (d.type === "Artwork" && d.image) {
+                html = `<img src="${d.image}" width="150" style="display:block;margin-bottom:5px;">` + html;
+              }
+              tooltip
+                .html(html)
+                .style("opacity", 1)
+                .style("left", e.pageX + 10 + "px")
+                .style("top", e.pageY + 10 + "px");
+            })
+            .on("mouseout", (e, d) => {
+              d3.select(e.currentTarget).transition().duration(200)
+                .attr("r", d => {
+                  if (d.type === "Provider") return 20;
+                  if (d.type === "Creator") return 10;
+                  if (d.type === "TimePeriodCluster" || d.type === "CreatorCluster")
+                    return clusterRadius(d);
+                  return 12;
+                });
+              tooltip.style("opacity", 0);
+            })
+            .on("click", (e, d) => {
+              if (d.type === "TimePeriodCluster" || d.type === "CreatorCluster") {
+                // Expand the cluster
+                const { nodes: newNodes, links: newLinks } = expandCluster(d, updatedNodes, updatedLinks);
+                nodes = newNodes;
+                links = newLinks;
+                // Rebuild period-to-artwork map on the flattened node list
+                timePeriodMap = new Map();
+                newNodes
+                  .filter(n => n.type === "Artwork")
+                  .forEach(art => {
+                    const tp = art.timePeriod;
+                    if (!timePeriodMap.has(tp)) timePeriodMap.set(tp, []);
+                    timePeriodMap.get(tp).push(art);
+                  });
+
+
+                // clear & redraw all boxes from the fresh map
+                updateGraph(newNodes, newLinks);
+              }
+            })
             .call(d3.drag()
               .on("start", dragStarted)
               .on("drag", dragged)
               .on("end", dragEnded)
             );
 
-          newNodeSel.on("mouseover", (event, d) => {
-            d3.select(event.currentTarget)
-              .transition()
-              .duration(200)
-              .attr("r", () => {
-                if (d.type === "Provider") return 20 * 1.5;
-                if (d.type === "Creator") return 10 * 1.5;
-                return 12 * 1.5;
-              });
-            let tooltipContent = `<strong>${d.label}</strong><br>Type: ${d.type} <br>Medium: ${d.medium}`;
-            if (d.type === "Artwork" && d.image) {
-              tooltipContent = `<img src="${d.image}" width="150" height="150" style="display:block;margin-bottom:5px;">` + tooltipContent;
-            }
-            tooltip.transition().duration(200).style("opacity", 1);
-            tooltip.html(tooltipContent)
-              .style("left", (event.pageX + 10) + "px")
-              .style("top", (event.pageY + 10) + "px");
-          }).on("mouseout", (event, d) => {
-            d3.select(event.currentTarget)
-              .transition()
-              .duration(200)
-              .attr("r", () => {
-                if (d.type === "Provider") return 20;
-                if (d.type === "Creator") return 10;
-                return 12;
-              });
-            tooltip.transition().duration(200).style("opacity", 0);
-          });
-
-
-
-
-          simulation.on("tick", () => {
-            newLinkSel
-              .attr("x1", d => d.source.x)
-              .attr("y1", d => d.source.y)
-              .attr("x2", d => d.target.x)
-              .attr("y2", d => d.target.y);
-
-            newNodeSel
-              .attr("cx", d => d.x)
-              .attr("cy", d => d.y);
-
-            // Update bounding boxes
-            newBoundingBoxes.forEach(({ period, rect, label }) => {
-              const periodArtworks = newTimePeriodMap.get(period) || [];
-              if (!periodArtworks.length) return;
-
-              let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-              periodArtworks.forEach(art => {
-                const node = filteredNodes.find(n => n.id === art.id);
-                if (node) {
-                  if (node.x < minX) minX = node.x;
-                  if (node.x > maxX) maxX = node.x;
-                  if (node.y < minY) minY = node.y;
-                  if (node.y > maxY) maxY = node.y;
-                }
-              });
-              if (minX === Infinity) return;
-              const pad = 20;
-              minX -= pad; minY -= pad;
-              maxX += pad; maxY += pad;
-
-              rect
-                .attr("x", minX)
-                .attr("y", minY)
-                .attr("width", maxX - minX)
-                .attr("height", maxY - minY);
-              label
-                .attr("x", minX + 5)
-                .attr("y", minY + 15);
-            });
-          });
-
+          //restart the simulation
           simulation.alpha(1).restart();
-        });
+        }
 
-        function dragStarted(event, d) {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
+
+
+        ({ nodes, links } = performHybridClustering(rawNodes, rawLinks));
+        updateGraph(nodes, links);
+
+
+        // ——— DRAG HANDLERS ———
+        function dragStarted(e, d) {
+          if (!e.active) simulation.alphaTarget(0.3).restart();
           d.fx = d.x;
           d.fy = d.y;
         }
-        function dragged(event, d) {
-          d.fx = event.x;
-          d.fy = event.y;
+        function dragged(e, d) {
+          d.fx = e.x;
+          d.fy = e.y;
         }
-        function dragEnded(event, d) {
-          if (!event.active) simulation.alphaTarget(0);
+        function dragEnded(e, d) {
+          if (!e.active) simulation.alphaTarget(0);
           d.fx = null;
           d.fy = null;
         }
 
-        // Draw Timeline Background with Grouping 
-        //  create a separate timeline SVG that groups artworks by time period.
-        const timelineWidth = 900;
-        const timelineHeight = 150;
-        const timelineMargin = { top: 20, right: 20, bottom: 20, left: 40 };
+        /***********************************************
+         * 5) TIMELINE SETUP 
+         ***********************************************/
+        const timelineWidth = 900,
+          timelineHeight = 150,
+          timelineMargin = { top: 20, right: 20, bottom: 30, left: 40 };
 
-        // Create an SVG for the timeline in the element with id "timeline".
-        const timelineSvg = d3.select("#timeline")
+        // Clear previous timeline content
+        d3.select("#timeline").selectAll("*").remove();
+
+        // Create SVG and add a subtle background gradient
+        const timelineSvg = d3
+          .select("#timeline")
           .append("svg")
           .attr("width", timelineWidth)
           .attr("height", timelineHeight);
 
-        // Helper to extract a numeric year from a period label using a regex
+        // Define a linear gradient for the background
+        const timelineDefs = timelineSvg.append("defs");
+        const gradient = timelineDefs.append("linearGradient")
+          .attr("id", "timelineGradient")
+          .attr("x1", "0%")
+          .attr("x2", "0%")
+          .attr("y1", "0%")
+          .attr("y2", "100%");
+
+        gradient.append("stop")
+          .attr("offset", "0%")
+          .attr("stop-color", "#f0f8ff");
+        gradient.append("stop")
+          .attr("offset", "100%")
+          .attr("stop-color", "#ffffff");
+
+        timelineSvg.append("rect")
+          .attr("width", timelineWidth)
+          .attr("height", timelineHeight)
+          .attr("fill", "url(#timelineGradient)");
+
         function parseYear(label) {
-          const match = label.match(/\d{3,4}/);
-          if (match) return +match[0];
-          return 0;
+          const m = label.match(/\d{3,4}/);
+          return m ? +m[0] : 0;
         }
 
-        // Build timeline data from the unique time periods
         const timelineData = Array.from(timePeriodMap.entries())
-          .filter(([_, artworks]) => artworks.length > 0)
-          .map(([period, artworks]) => ({
+          .filter(([_, arts]) => arts.length > 0)
+          .map(([period, arts]) => ({
             label: period,
             year: parseYear(period)
           }))
-          .filter(d => d.year > 0); // remove "Unknown" for the timeline 
+          .filter(d => d.year > 0);
 
         const timelineDataRaw = Array.from(timePeriodMap.entries())
-          .filter(([_, artworks]) => artworks.length > 0)
-          .map(([period, artworks]) => ({
+          .filter(([_, arts]) => arts.length > 0)
+          .map(([period, arts]) => ({
             label: period,
             year: parseYear(period)
           }));
 
-        const knownTimelineData = timelineDataRaw.filter(d => d.year > 0);
-        const unknownTimelineData = timelineDataRaw.filter(d => d.year === 0); // "Unknown"
+        const unknownTimelineData = timelineDataRaw.filter(d => d.year === 0);
+        const unknownX = timelineMargin.left - 40;
 
-
-        const unknownX = timelineMargin.left - 40; // to the left of the timeline
-
-        // Circle
-        timelineSvg.selectAll(".unknownCircle")
+        // Draw unknown timeline circles and labels
+        timelineSvg
+          .selectAll(".unknownCircle")
           .data(unknownTimelineData)
           .join("circle")
           .attr("class", "unknownCircle")
@@ -951,37 +1133,42 @@ document.addEventListener("DOMContentLoaded", () => {
           .attr("stroke", "#fff")
           .attr("stroke-width", 1);
 
-        // Label
-        timelineSvg.selectAll(".unknownLabel")
+        timelineSvg
+          .selectAll(".unknownLabel")
           .data(unknownTimelineData)
           .join("text")
           .attr("class", "unknownLabel")
           .attr("x", unknownX)
-          .attr("y", (timelineHeight / 2) - 16)
+          .attr("y", timelineHeight / 2 - 12)
           .attr("text-anchor", "middle")
           .attr("fill", "#333")
           .attr("font-size", 12)
           .text("Unknown");
 
-
-
-
-        // Create a linear scale to map numeric years to positions on the timeline.
+        // Define the horizontal scale and axis with grid lines
         const xExtent = d3.extent(timelineData, d => d.year);
-        const xScale = d3.scaleLinear()
+        const xScale = d3
+          .scaleLinear()
           .domain([xExtent[0] || 0, xExtent[1] || 100])
           .range([timelineMargin.left, timelineWidth - timelineMargin.right]);
 
-        // Create an axis for the timeline.
         const xAxis = d3.axisBottom(xScale)
+          .tickSize(-timelineHeight + timelineMargin.top + timelineMargin.bottom)
+          .tickPadding(10)
           .tickFormat(d => (d === 0 ? "Unknown" : d));
-        timelineSvg.append("g")
-          .attr("transform", `translate(0,${timelineHeight - timelineMargin.bottom})`)
-          .call(xAxis);
 
-        // Add Time Period Markers
-        // Plot a circle for each unique time period.
-        timelineSvg.selectAll(".timelineCircle")
+        timelineSvg
+          .append("g")
+          .attr("transform", `translate(0,${timelineHeight - timelineMargin.bottom})`)
+          .call(xAxis)
+          .call(g => g.select(".domain").remove())
+          .call(g => g.selectAll("line")
+            .attr("stroke", "#ccc")
+            .attr("stroke-dasharray", "2,2"));
+
+        // Timeline circles with smooth transitions on hover
+        timelineSvg
+          .selectAll(".timelineCircle")
           .data(timelineData)
           .join("circle")
           .attr("class", "timelineCircle")
@@ -991,129 +1178,115 @@ document.addEventListener("DOMContentLoaded", () => {
           .attr("fill", "#007acc")
           .attr("stroke", "#fff")
           .attr("stroke-width", 1)
-          .on("mouseover", function (event, d) {
-            d3.select(this).attr("r", 12);
+          .on("mouseover", function (e, d) {
+            d3.select(this)
+              .transition()
+              .duration(300)
+              .attr("r", 12);
             tooltip.transition().duration(200).style("opacity", 1);
-            tooltip.html(`<strong>${d.label}</strong><br>Year: ${d.year || "Unknown"}`)
-              .style("left", (event.pageX + 10) + "px")
-              .style("top", (event.pageY + 10) + "px");
+            tooltip
+              .html(`<strong>${d.label}</strong><br>Year: ${d.year || "Unknown"}`)
+              .style("left", e.pageX + 10 + "px")
+              .style("top", e.pageY + 10 + "px");
           })
-          .on("mouseout", function (event, d) {
-            d3.select(this).attr("r", 8);
+          .on("mouseout", function () {
+            d3.select(this)
+              .transition()
+              .duration(300)
+              .attr("r", 8);
             tooltip.transition().duration(200).style("opacity", 0);
           })
-          .on("click", function (event, d) {
-            // Clicking a time period marker sets the dropdown value and triggers the filter.
+          .on("click", function (e, d) {
             document.getElementById("institution").value = d.label;
             document.getElementById("applyFilters").click();
           });
 
-        //  text labels above each timeline marker.
-        timelineSvg.selectAll(".timelineLabel")
+        timelineSvg
+          .selectAll(".timelineLabel")
           .data(timelineData)
           .join("text")
           .attr("class", "timelineLabel")
           .attr("x", d => xScale(d.year))
-          .attr("y", (timelineHeight / 2) - 16)
+          .attr("y", timelineHeight / 2 - 12)
           .attr("text-anchor", "middle")
           .attr("fill", "#333")
           .attr("font-size", 12)
           .text(d => d.label);
 
-        // --- Add Artwork Markers to the Timeline ---
-        // For each artwork - a marker on the timeline. markers are positioned by the time period’s numeric year.
-        // If multiple artworks share same period vertically stack them with a slight offset
+        // Artwork markers with improved positioning and hover transition
         const artworkTimelineData = [];
-        for (const [period, artworks] of timePeriodMap) {
+        for (let [period, arts] of timePeriodMap) {
           const year = parseYear(period);
-          artworks.forEach((artwork, index) => {
-            artworkTimelineData.push({
-              period,
-              year,
-              artwork,
-              index,
-              total: artworks.length
-            });
+          arts.forEach((art, i) => {
+            artworkTimelineData.push({ period, year, artwork: art, index: i });
           });
         }
 
-        // For each artwork in timeline plot small circle 
-        timelineSvg.selectAll(".artworkTimelineMarker")
+        timelineSvg
+          .selectAll(".artworkTimelineMarker")
           .data(artworkTimelineData)
           .join("circle")
           .attr("class", "artworkTimelineMarker")
-          // Horizontal position based on the year plus a slight jitter 
           .attr("cx", d => xScale(d.year) + (d.index % 3) * 4)
-          // Vertical position: slightly below the axis + additional offset per artwork.
-          .attr("cy", d => (timelineHeight / 2) + 20 + (Math.floor(d.index / 3) * 8))
+          .attr("cy", d => timelineHeight / 2 + 20 + Math.floor(d.index / 3) * 8)
           .attr("r", 4)
           .attr("fill", "orange")
           .attr("stroke", "#fff")
           .attr("stroke-width", 1)
-          .on("mouseover", function (event, d) {
-            d3.select(this).attr("r", 6);
+          .on("mouseover", function (e, d) {
+            d3.select(this)
+              .transition()
+              .duration(200)
+              .attr("r", 6);
             tooltip.transition().duration(200).style("opacity", 1);
-            tooltip.html(`<strong>${d.artwork.label}</strong><br>Period: ${d.period}`)
-              .style("left", (event.pageX + 10) + "px")
-              .style("top", (event.pageY + 10) + "px");
+            tooltip
+              .html(`<strong>${d.artwork.label}</strong><br>Period: ${d.period}`)
+              .style("left", e.pageX + 10 + "px")
+              .style("top", e.pageY + 10 + "px");
           })
-          .on("mouseout", function (event, d) {
-            d3.select(this).attr("r", 4);
+          .on("mouseout", function () {
+            d3.select(this)
+              .transition()
+              .duration(200)
+              .attr("r", 4);
             tooltip.transition().duration(200).style("opacity", 0);
           })
-          .on("click", function (event, d) {
-            console.log("Artwork clicked:", d.artwork.label);
-            const artworkId = d.artwork.id;
-
-            // Reset strokes for all nodes back to default styles.
+          .on("click", function (e, d) {
             d3.selectAll(".nodes circle")
-              .attr("stroke", function (nodeData) {
-                if (nodeData.type === "Artwork") return "steelblue";
-                if (nodeData.type === "Provider") return "gold";
-                if (nodeData.type === "Creator") return "darkgreen";
+              .attr("stroke", nd => {
+                if (nd.type === "Artwork") return "steelblue";
+                if (nd.type === "Provider") return "gold";
+                if (nd.type === "Creator") return "darkgreen";
                 return "#fff";
               })
               .attr("stroke-width", 2);
-
-            // Highlight clicked artwork node by updating stroke style.
             d3.selectAll(".nodes circle")
-              .filter(nodeData => nodeData.id === artworkId)
+              .filter(nd => nd.id === d.artwork.id)
               .attr("stroke", "red")
               .attr("stroke-width", 4);
           });
 
-        timelineSvg.selectAll(".unknownArtworkMarker")
+        timelineSvg
+          .selectAll(".unknownArtworkMarker")
           .data(artworkTimelineData.filter(d => d.year === 0))
           .join("circle")
           .attr("class", "unknownArtworkMarker")
           .attr("cx", d => unknownX + (d.index % 3) * 4)
-          .attr("cy", d => (timelineHeight / 2) + 20 + (Math.floor(d.index / 3) * 8))
+          .attr("cy", d => timelineHeight / 2 + 20 + Math.floor(d.index / 3) * 8)
           .attr("r", 4)
           .attr("fill", "orange")
           .attr("stroke", "#fff")
           .attr("stroke-width", 1);
 
-
-
-
-
-
-
-
-
-
-        // LEAFLET MAP INTEGRATION 
-
-        // Global variable to access markers in the filter too
+        /***********************************************
+         * 6) LEAFLET MAP 
+         ***********************************************/
         let mapPoints = [];
-
-        // Build mapPoints array from items with coordinates
         items.forEach(item => {
-          const lat = item.edmPlaceLatitude?.[0];
-          const lon = item.edmPlaceLongitude?.[0];
+          const lat = item.edmPlaceLatitude?.[0],
+            lon = item.edmPlaceLongitude?.[0];
           if (lat && lon) {
             mapPoints.push({
-
               lat: parseFloat(lat),
               lon: parseFloat(lon),
               title: getTitle(item),
@@ -1121,71 +1294,129 @@ document.addEventListener("DOMContentLoaded", () => {
               image: item.edmIsShownBy?.[0],
               timePeriod: getTimePeriod(item)
             });
-
           }
         });
 
-        // Create map
-        const map = L.map("map").setView([52.37, 4.89], 5); // Default to Amsterdam - change later to default based on centre of most artworks retreived from query
+        const map = L.map("map").setView([52.37, 4.89], 5);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "&copy; OpenStreetMap contributors"
         }).addTo(map);
 
-        // Marker layer group
         const markerLayer = L.layerGroup().addTo(map);
 
-        // Helper to add markers
         function updateMapMarkers(points) {
           markerLayer.clearLayers();
           points.forEach(p => {
-            const popupContent = `
-        <div style="max-width:200px">
-          ${p.image ? `<img src="${p.image}" style="width:100%; margin-bottom: 5px;">` : ""}
-          <strong>${p.title}</strong><br>
-          <em>${p.creators.join(", ")}</em>
-        </div>
-      `;
-            L.marker([p.lat, p.lon]).addTo(markerLayer).bindPopup(popupContent);
+            const popup = `
+              <div style="max-width:200px">
+                ${p.image ? `<img src="${p.image}" style="width:100%;margin-bottom:5px">` : ""}
+                <strong>${p.title}</strong><br>
+                <em>${p.creators.join(", ")}</em>
+              </div>
+            `;
+            L.marker([p.lat, p.lon]).addTo(markerLayer).bindPopup(popup);
           });
-
-          if (points.length > 0) {
+          if (points.length) {
             const bounds = points.map(p => [p.lat, p.lon]);
             map.fitBounds(bounds, { padding: [20, 20] });
           }
         }
 
-        // Initial display
         updateMapMarkers(mapPoints);
 
-        // Hook into existing time period filter
         document.getElementById("applyFilters").addEventListener("click", () => {
-          const selectedTime = document.getElementById("institution").value;
-          const filteredPoints = (selectedTime === "all")
-            ? mapPoints
-            : mapPoints.filter(p => p.timePeriod === selectedTime);
+          const sel = document.getElementById("institution").value;
+          const filteredPoints =
+            sel === "all"
+              ? mapPoints
+              : mapPoints.filter(p => p.timePeriod === sel);
           updateMapMarkers(filteredPoints);
         });
-
-
-
-
-
-
-
-
-
-
-
-        //error 
-
-
-
-
       })
-      .catch(error => console.error("Error fetching data:", error));
-
+      .catch(console.error);
   }
 
-  fetchAndRenderArtworks(API_URL);
+  /***********************************************
+   * HELPERS: Title / Creators / Time / Media / Gallery / Cluster sizing
+   ***********************************************/
+  function getTitle(i) {
+    return (
+      i.title?.[0] ||
+      i.dcTitleLangAware?.def?.[0] ||
+      "Untitled"
+    );
+  }
+  function getCreatorLabels(i) {
+    if (i.edmAgentLabel?.length) {
+      const L = i.edmAgentLabel
+        .map(a => a.def)
+        .filter(s => s && s.trim());
+      if (L.length) return L;
+    }
+    return i.dcCreator?.length ? i.dcCreator : ["Unknown Artist"];
+  }
+  function getTimePeriod(i) {
+    return (
+      i.edmTimespanLabel?.[0].def ||
+      "Unknown Period"
+    );
+  }
+  function getMediaType(i) {
+    return (
+      i.dcTypeLangAware?.en?.[0] ||
+      i.dcTypeLangAware?.def?.[0] ||
+      "Artwork"
+    );
+  }
+  function updateGallery(arr) {
+    const g = document.getElementById("gallery");
 
+    // Gracefully handle gallery element is missing
+    if (!g) {
+      console.error('Gallery element not found');
+      return;
+    }
+
+    // Clear the gallery before updating
+    g.innerHTML = "";
+
+    // Loop through the items in the array to render the content
+    arr.forEach(d => {
+      if (!d.image) return; // Skip if no image is available
+
+      // Create a container for each item
+      const c = document.createElement("div");
+      c.style.cssText =
+        "width:140px;border:1px solid #ddd;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.1);background:#fff;margin:5px;font-family:sans-serif";
+
+      // Create the image element
+      const img = document.createElement("img");
+      img.src = d.image;
+      img.alt = d.label;
+      img.style.cssText = "width:100%;display:block";
+
+      // Create the caption for each item
+      const cap = document.createElement("div");
+      cap.textContent = d.label;
+      cap.style.cssText = "font-size:12px;padding:6px 8px;text-align:center";
+
+      // Append image and caption to the container
+      c.append(img, cap);
+
+      // append the container to the gallery
+      g.appendChild(c);
+    });
+  }
+
+
+
+  function clusterRadius(d) {
+    const count = d.collapsedNodes?.length || 0;
+    const r = 10 + Math.sqrt(count) * 5;
+    return Math.min(r, 50);
+  }
+
+  // — FETCH DATA AND RENDER ARTWORKS —
+  fetchAndRenderArtworks(API_URL);
 });
+

@@ -3,54 +3,101 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Network Visualisation Prototype</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="description" content="Interactive network visualisation tool for exploring artifact connections and relationships">
+  <title>Artefact Network Visualisation Tool</title>
+  
+  <!-- fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
-
+  
+  <!-- External stylesheets -->
+  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+  <!-- Favicon -->
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+
+  
 </head>
 <body>
-  <h1>Artefact Network <span class="fancy">Visualisation</span></h1>
-  <div id="gallery" style="display: flex; flex-wrap: wrap; gap: 12px; padding: 20px; max-width: 1200px; margin: auto;">
-    <!-- Thumbnails insetred dynamically -->
-  </div>
-  <div class="container">
-    <aside class="sidebar">
-      <h2>Filter Options</h2>
+  <header>
+    <h1>Artefact Network <span class="fancy">Visualisation</span></h1>
+  </header>
 
-      <select id="artist"></select>
-<button id="applyArtistFilter">Apply Artist Filter</button>
+  <main>
+    <div class="container">
+      <aside class="sidebar" aria-label="Filter controls">
+        <h2>Explore & Filter</h2>
+        
+        <section class="filter-section">
+          <h3>Artist</h3>
+          <div class="filter-control">
+            <select id="artist" aria-label="Select artist">
+              <option value="all">All Artists</option>
+              <!-- Options populated dynamically -->
+            </select>
+            <button id="applyArtistFilter" class="primary-button">Apply Artist Filter</button>
+          </div>
+        </section>
+        
+        <section class="filter-section">
+          <h3>Colour Analysis</h3>
+          <div class="filter-control">
+            <div id="color-options" class="color-palette" aria-label="Color palette options"></div>
+            <button id="applyColorFilter" class="primary-button">Apply Color Filter</button>
+          </div>
+        </section>
+        
+        <section class="filter-section">
+          <h3>Time Period</h3>
+          <div class="filter-control">
+            <select id="institution" aria-label="Select time period">
+              <option value="all">All Time Periods</option>
+              <!-- Options populated dynamically -->
+            </select>
+            <button id="applyFilters" class="primary-button">Apply Time Filter</button>
+          </div>
+        </section>
+        
 
-      
-      <div>
-        <label>Filter by Colour:</label>
-        <div id="color-options" style="margin-top: 8px;"></div>
-        <button id="applyColorFilter">Apply Colour Filter</button>
-      </div>
-      
-      <div>
-        <label for="institution">Filter by Time Period:</label>
-        <select id="institution">
-          <option value="all">All</option>
-        </select>
-      </div>
+      </aside>
+
+      <section id="graph" class="visualization-area" aria-label="Network graph visualization"></section>
+    </div>
+    <div id="legend" style="position:absolute; top:10px; right:10px; background:#fff; padding:10px; border-radius:8px; font-size:12px; box-shadow:0 2px 5px rgba(0,0,0,0.2)">
+      <div><span style="display:inline-block;width:12px;height:12px;background:gold;border-radius:50%;margin-right:6px;"></span>Provider</div>
+      <div><span style="display:inline-block;width:12px;height:12px;background:darkgreen;border-radius:50%;margin-right:6px;"></span>Creator</div>
+      <div><span style="display:inline-block;width:12px;height:12px;background:steelblue;border-radius:50%;margin-right:6px;"></span>Artwork</div>
+      <div><span style="display:inline-block;width:12px;height:12px;background:purple;border-radius:50%;margin-right:6px;"></span>Creator Cluster</div>
+      <div><span style="display:inline-block;width:12px;height:12px;background:orange;border-radius:50%;margin-right:6px;"></span>Time Period Cluster</div>
+      <div><span style="display:inline-block;width:12px;height:2px;background:red;margin-right:6px;"></span>Collaboration</div>
+    </div>
+    
+
+    <section id="timeline" class="timeline-container" aria-label="Artifacts timeline"></section>
+    
+    <section id="map" class="map-container" aria-label="Geographical distribution map"></section>
+    
+    <section id="gallery" class="gallery-container" aria-label="Artifact gallery">
+      <!-- Thumbnails inserted dynamically -->
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-content">
+      <p>© 2025 Artifact Network Visualisation Tool</p>
+    </div>
+  </footer>
 
 
-
-      <div style="margin-top: 15px;">
-        <button id="applyFilters">Apply Filters</button>
-      </div>
-    </aside>
-
-    <div id="graph"></div>
-  </div>
-
-  <div id="timeline" style="width:900px; margin:20px auto;"></div>
-  <div id="map" style="width: 100%; height: 500px; margin-top: 30px;"></div>
-
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/huebee/dist/huebee.pkgd.min.js"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="script.js"></script>
 </body>

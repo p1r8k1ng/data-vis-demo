@@ -1,0 +1,20 @@
+{
+  "name": "data-vis-demo",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.10",
+    "@babel/preset-env": "^7.26.9",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jest-image-snapshot": "^6.4.0",
+    "jest-puppeteer": "^11.0.0",
+    "puppeteer": "^24.7.2"
+  },
+  "dependencies": {
+    "d3": "^7.9.0"
+  }
+}

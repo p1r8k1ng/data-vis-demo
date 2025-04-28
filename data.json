@@ -1,4 +1,8 @@
+
+
+
 {
+  "id": "NOT IN USE ANYMORE - EARLY PROTOTYPE",
   "@context": "https://linked.art/ns/v1/linked-art.json",
   "type": "LinkedArtData",
   "artefacts": [
